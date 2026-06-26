@@ -21,6 +21,9 @@ xcuserdata/
 # OpenWolf (per-developer project intelligence; regenerate with `openwolf init` / `openwolf scan`)
 .wolf/
 
+# Claude Code local hook registration (per-developer; recreated by `openwolf init`)
+.claude/
+
 # Secrets — never commit. API keys live in the device Keychain at runtime, not in the repo.
 *.key
 secrets.plist
