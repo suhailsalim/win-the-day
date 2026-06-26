@@ -1,0 +1,188 @@
+import SwiftUI
+
+/// iOS-style switch matching the design (sage when on).
+struct IOSToggle: View {
+    @Binding var isOn: Bool
+    var onColor: Color = Theme.sage
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.6)) { isOn.toggle() }
+        } label: {
+            ZStack(alignment: isOn ? .trailing : .leading) {
+                Capsule()
+                    .fill(isOn ? onColor : Color(white: 0.47).opacity(0.18))
+                    .frame(width: 51, height: 31)
+                Circle()
+                    .fill(.white)
+                    .frame(width: 27, height: 27)
+                    .shadow(color: .black.opacity(0.2), radius: 2.5, x: 0, y: 2)
+                    .padding(2)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Read-only switch (drives an action) — used for HealthKit metric rows.
+struct ToggleRow: View {
+    let on: Bool
+    let action: () -> Void
+    var onColor: Color = Theme.sage
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: on ? .trailing : .leading) {
+                Capsule()
+                    .fill(on ? onColor : Color(white: 0.47).opacity(0.18))
+                    .frame(width: 51, height: 31)
+                Circle()
+                    .fill(.white)
+                    .frame(width: 27, height: 27)
+                    .shadow(color: .black.opacity(0.2), radius: 2.5, x: 0, y: 2)
+                    .padding(2)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct SectionHeader: View {
+    let text: String
+    var color: Color? = nil
+    var body: some View {
+        HStack(spacing: 6) {
+            if let color {
+                Circle().fill(color).frame(width: 7, height: 7)
+            }
+            Text(text.uppercased())
+                .font(.system(size: 13, weight: .medium))
+                .tracking(0.3)
+                .foregroundStyle(Theme.secondaryInk)
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 22)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct ScreenTitle: View {
+    let sub: String?
+    let title: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            if let sub {
+                Text(sub)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.secondaryInk)
+            }
+            Text(title)
+                .font(.system(size: 34, weight: .bold))
+                .tracking(0.3)
+                .foregroundStyle(Theme.ink)
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A divider that stops short of card edges.
+struct Hairline: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color(white: 0.27).opacity(0.1))
+            .frame(height: 0.5)
+    }
+}
+
+/// Sheet for picking a day to edit (no future dates).
+struct DatePickerSheet: View {
+    let selected: String      // yyyy-MM-dd
+    let onPick: (Date) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var date = Date()
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                WarmBackground()
+                VStack {
+                    DatePicker("Day", selection: $date, in: ...Date(), displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .tint(Theme.accentDark)
+                        .padding()
+                        .background(RoundedRectangle(cornerRadius: 22).fill(Color.white.opacity(0.6)))
+                        .padding()
+                    Spacer()
+                }
+            }
+            .navigationTitle("Go to day")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Go") { onPick(date); dismiss() }.fontWeight(.semibold)
+                }
+            }
+        }
+        .onAppear { date = AppStore.parse(selected) }
+        .tint(Theme.accentDark)
+    }
+}
+
+/// A simple wrapping layout (left-to-right, wraps to new rows) for chips/tags.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var rowWidth: CGFloat = 0, rowHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0, totalWidth: CGFloat = 0
+        for sub in subviews {
+            let size = sub.sizeThatFits(.unspecified)
+            if rowWidth + size.width > maxWidth, rowWidth > 0 {
+                totalHeight += rowHeight + spacing
+                totalWidth = max(totalWidth, rowWidth - spacing)
+                rowWidth = 0; rowHeight = 0
+            }
+            rowWidth += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        totalHeight += rowHeight
+        totalWidth = max(totalWidth, rowWidth - spacing)
+        return CGSize(width: min(totalWidth, maxWidth), height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for sub in subviews {
+            let size = sub.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX, x > bounds.minX {
+                x = bounds.minX; y += rowHeight + spacing; rowHeight = 0
+            }
+            sub.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+/// Small rounded tile holding an SF Symbol, with a gradient fill.
+struct IconTile: View {
+    let symbol: String
+    let colors: [Color]
+    var size: CGFloat = 30
+    var corner: CGFloat = 8
+    var body: some View {
+        RoundedRectangle(cornerRadius: corner, style: .continuous)
+            .fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: size, height: size)
+            .overlay(
+                Image(systemName: symbol)
+                    .font(.system(size: size * 0.5, weight: .semibold))
+                    .foregroundStyle(.white)
+            )
+    }
+}

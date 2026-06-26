@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Newsreader.ttf</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Win the Day uses the camera to read nutrition labels and add supplements or foods to your library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Win the Day reads a photo of a nutrition label to add supplements or foods to your library.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Win the Day uses your location to calculate accurate prayer times and send prayer reminders.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Win the Day reads your calendar to plan your week around real commitments and adds your workouts, sessions and events.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Win the Day reads your calendar to plan your week around real commitments and adds your workouts, sessions and events.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Win the Day creates reminders for your sessions, prep and upcoming events.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Win the Day creates reminders for your sessions, prep and upcoming events.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Win the Day imports birthdays and anniversaries from your contacts so it can help you plan ahead.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+</dict>
+</plist>

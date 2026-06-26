@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body { background: #d7d3cc; font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  input, textarea, button { font-family: inherit; }
+  textarea { resize: none; }
+  .scroll::-webkit-scrollbar { width: 0; height: 0; }
+  input::placeholder, textarea::placeholder { color: rgba(60,60,67,0.3); }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes glasspulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+</style>
+</helmet>
+<div style="min-height: 100vh; background: radial-gradient(120% 80% at 50% 0%, #e4e0d8 0%, #d3cfc7 100%); display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px;">
+
+  <!-- DEVICE -->
+  <div style="position: relative; width: 402px; height: 872px; border-radius: 56px; background: #000; padding: 4px; box-shadow: 0 50px 100px rgba(60,40,20,0.28), 0 0 0 2px rgba(0,0,0,0.4);">
+  <div style="position: relative; width: 100%; height: 100%; border-radius: 52px; overflow: hidden; background: #F3ECE2;">
+
+    <!-- warm gradient + refraction blobs -->
+    <div style="position: absolute; inset: 0; background: linear-gradient(170deg, #FCF6EE 0%, #F6E9DA 46%, #F1E2D2 100%); z-index: 0;"></div>
+    <div style="position: absolute; top: 120px; left: -60px; width: 280px; height: 280px; border-radius: 50%; background: radial-gradient(circle, rgba(230,167,101,0.5), transparent 70%); filter: blur(30px); z-index: 0;"></div>
+    <div style="position: absolute; top: 380px; right: -70px; width: 300px; height: 300px; border-radius: 50%; background: radial-gradient(circle, rgba(120,180,150,0.34), transparent 70%); filter: blur(34px); z-index: 0;"></div>
+    <div style="position: absolute; bottom: 60px; left: 40px; width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(circle, rgba(210,150,120,0.26), transparent 70%); filter: blur(30px); z-index: 0;"></div>
+
+    <!-- status bar -->
+    <div style="position: absolute; top: 0; left: 0; right: 0; height: 54px; z-index: 40; display: flex; align-items: center; justify-content: space-between; padding: 0 30px;">
+      <span style="font-size: 16px; font-weight: 600; color: #1C1C1E; letter-spacing: -0.2px; padding-top: 6px;">9:41</span>
+      <div style="display: flex; align-items: center; gap: 7px; padding-top: 6px;">
+        <svg width="19" height="12" viewBox="0 0 19 12"><rect x="0" y="7.5" width="3.2" height="4.5" rx="0.7" fill="#1C1C1E"/><rect x="4.8" y="5" width="3.2" height="7" rx="0.7" fill="#1C1C1E"/><rect x="9.6" y="2.5" width="3.2" height="9.5" rx="0.7" fill="#1C1C1E"/><rect x="14.4" y="0" width="3.2" height="12" rx="0.7" fill="#1C1C1E"/></svg>
+        <svg width="17" height="12" viewBox="0 0 17 12"><path d="M8.5 3.2C10.8 3.2 12.9 4.1 14.4 5.6L15.5 4.5C13.7 2.7 11.2 1.5 8.5 1.5C5.8 1.5 3.3 2.7 1.5 4.5L2.6 5.6C4.1 4.1 6.2 3.2 8.5 3.2Z" fill="#1C1C1E"/><path d="M8.5 6.8C9.9 6.8 11.1 7.3 12 8.2L13.1 7.1C11.8 5.9 10.2 5.1 8.5 5.1C6.8 5.1 5.2 5.9 3.9 7.1L5 8.2C5.9 7.3 7.1 6.8 8.5 6.8Z" fill="#1C1C1E"/><circle cx="8.5" cy="10.5" r="1.5" fill="#1C1C1E"/></svg>
+        <svg width="27" height="13" viewBox="0 0 27 13"><rect x="0.5" y="0.5" width="23" height="12" rx="3.5" stroke="#1C1C1E" stroke-opacity="0.35" fill="none"/><rect x="2" y="2" width="20" height="9" rx="2" fill="#1C1C1E"/><path d="M25 4.5V8.5C25.8 8.2 26.5 7.2 26.5 6.5C26.5 5.8 25.8 4.8 25 4.5Z" fill="#1C1C1E" fill-opacity="0.4"/></svg>
+      </div>
+    </div>
+    <!-- dynamic island -->
+    <div style="position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 126px; height: 37px; border-radius: 24px; background: #000; z-index: 50;"></div>
+
+    <!-- SCROLL AREA -->
+    <div class="scroll" style="position: absolute; inset: 0; z-index: 10; overflow-y: auto; overflow-x: hidden; padding: 60px 16px 128px;">
+
+      <!-- ===== TODAY ===== -->
+      <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <div style="padding: 4px 4px 2px;">
+          <div style="font-size: 15px; color: rgba(60,60,67,0.6); font-weight: 500;">{{ todaySub }}</div>
+          <div style="font-size: 34px; font-weight: 700; color: #1C1C1E; letter-spacing: 0.3px; line-height: 1.1; margin-top: 1px;">Today</div>
+        </div>
+
+        <!-- HealthKit sync card -->
+        <div style="margin-top: 14px; border-radius: 24px; position: relative; overflow: hidden; background: rgba(255,255,255,0.46); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.75); box-shadow: 0 6px 26px rgba(150,110,70,0.12), inset 0 1px 0 rgba(255,255,255,0.85); padding: 15px 16px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 13px;">
+            <div style="width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(160deg, #FF5E7A, #FB1E4B); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(251,30,75,0.3);">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7.5-4.9-10-9.2C.3 8.6 1.6 4.8 5 4.1c2-.4 3.8.5 4.9 2 1.1-1.5 2.9-2.4 4.9-2 3.4.7 4.7 4.5 3 7.7C19.5 16.1 12 21 12 21z"/></svg>
+            </div>
+            <div style="flex: 1;">
+              <div style="font-size: 15px; font-weight: 600; color: #1C1C1E;">Apple Health</div>
+              <div style="font-size: 12.5px; color: #4FB286; font-weight: 500;">{{ healthStatus }}</div>
+            </div>
+            <div style="font-size: 12px; color: rgba(60,60,67,0.5);">{{ healthSyncedAt }}</div>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <div style="flex: 1; background: rgba(255,255,255,0.5); border-radius: 15px; padding: 11px 13px; border: 0.5px solid rgba(255,255,255,0.6);">
+              <div style="font-size: 11.5px; color: rgba(60,60,67,0.6);">Steps today</div>
+              <div style="font-size: 22px; font-weight: 600; color: #1C1C1E; font-variant-numeric: tabular-nums; margin-top: 2px;">{{ healthSteps }}</div>
+            </div>
+            <div style="flex: 1; background: rgba(255,255,255,0.5); border-radius: 15px; padding: 11px 13px; border: 0.5px solid rgba(255,255,255,0.6);">
+              <div style="font-size: 11.5px; color: rgba(60,60,67,0.6);">Latest weight</div>
+              <div style="font-size: 22px; font-weight: 600; color: #1C1C1E; font-variant-numeric: tabular-nums; margin-top: 2px;">{{ healthWeight }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- tip -->
+        <div style="margin-top: 12px; display: flex; gap: 9px; align-items: flex-start; background: rgba(230,167,101,0.14); border: 0.5px solid rgba(230,167,101,0.3); border-radius: 16px; padding: 11px 13px;">
+          <span style="color: #C8843E; font-size: 14px;">◦</span>
+          <span style="font-size: 13.5px; color: #7A5836; line-height: 1.4;">{{ tipText }}</span>
+        </div>
+
+        <!-- meals -->
+        <div style="font-size: 13px; color: rgba(60,60,67,0.6); font-weight: 500; margin: 22px 8px 8px; text-transform: uppercase; letter-spacing: 0.3px;">What you ate</div>
+        <div style="border-radius: 22px; overflow: hidden; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: 0 6px 24px rgba(150,110,70,0.1), inset 0 1px 0 rgba(255,255,255,0.85);">
+          <sc-for list="{{ mealFields }}" as="m" hint-placeholder-count="5">
+            <div style="padding: 11px 16px; border-bottom: 0.5px solid rgba(60,60,67,0.1);">
+              <div style="font-size: 12px; color: rgba(60,60,67,0.55); margin-bottom: 3px;">{{ m.label }}</div>
+              <textarea rows="1" value="{{ m.value }}" onInput="{{ m.onInput }}" placeholder="{{ m.ph }}" style="width: 100%; background: transparent; border: none; outline: none; color: #1C1C1E; font-size: 16px; line-height: 1.35; padding: 0; min-height: 21px;"></textarea>
+            </div>
+          </sc-for>
+          <div style="padding: 13px 16px;">
+            <button onClick="{{ estimate }}" style="{{ estimateBtnStyle }}">{{ estimateLabel }}</button>
+          </div>
+        </div>
+
+        <!-- AI result -->
+        <sc-if value="{{ hasAi }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top: 12px; border-radius: 22px; background: linear-gradient(180deg, rgba(230,167,101,0.18), rgba(230,167,101,0.06)); border: 0.5px solid rgba(230,167,101,0.4); box-shadow: inset 0 1px 0 rgba(255,255,255,0.6); padding: 15px 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 11px;">
+              <div style="font-size: 13.5px; font-weight: 600; color: #B7752E;">{{ aiModelLine }}</div>
+              <div style="font-size: 11.5px; color: rgba(60,60,67,0.5);">±10–15%</div>
+            </div>
+            <sc-for list="{{ aiMeals }}" as="r" hint-placeholder-count="3">
+              <div style="display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 0.5px solid rgba(60,60,67,0.1);">
+                <div style="min-width: 0;">
+                  <div style="font-size: 14px; color: #1C1C1E;">{{ r.label }}</div>
+                  <div style="font-size: 11.5px; color: rgba(60,60,67,0.5); line-height: 1.3; margin-top: 1px;">{{ r.note }}</div>
+                </div>
+                <div style="text-align: right; white-space: nowrap;">
+                  <div style="font-size: 14px; color: #1C1C1E; font-weight: 600;">{{ r.cal }}</div>
+                  <div style="font-size: 11.5px; color: rgba(60,60,67,0.5);">{{ r.macros }}</div>
+                </div>
+              </div>
+            </sc-for>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px;">
+              <div style="font-size: 14px; font-weight: 600; color: #1C1C1E;">Whole day</div>
+              <div style="font-size: 14px; color: #B7752E; font-weight: 600;">{{ aiTotalLine }}</div>
+            </div>
+            <div style="font-size: 11.5px; color: rgba(60,60,67,0.5); margin-top: 8px; line-height: 1.35;">Auto-filled your totals. Estimates are approximate.</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ aiError }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top: 12px; border-radius: 16px; background: rgba(255,255,255,0.5); border: 0.5px solid rgba(60,60,67,0.12); padding: 12px 14px; font-size: 13.5px; color: #4a4a4a; line-height: 1.4;">Couldn’t reach the estimator just now — no problem. Add calories &amp; protein by hand below.</div>
+        </sc-if>
+
+        <!-- totals -->
+        <div style="display: flex; gap: 10px; margin-top: 14px;">
+          <div style="flex: 1; border-radius: 18px; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: inset 0 1px 0 rgba(255,255,255,0.8); padding: 12px 14px;">
+            <div style="font-size: 12px; color: rgba(60,60,67,0.6);">Calories <span style="color:rgba(60,60,67,0.35);">/ 2000</span></div>
+            <input type="number" inputmode="numeric" value="{{ draft.calories }}" onInput="{{ setCalories }}" placeholder="—" style="width: 100%; background: transparent; border: none; outline: none; color: #1C1C1E; font-size: 24px; font-weight: 600; padding: 0; margin-top: 2px;">
+          </div>
+          <div style="flex: 1; border-radius: 18px; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: inset 0 1px 0 rgba(255,255,255,0.8); padding: 12px 14px;">
+            <div style="font-size: 12px; color: rgba(60,60,67,0.6);">Protein g <span style="color:rgba(60,60,67,0.35);">/ 120</span></div>
+            <input type="number" inputmode="numeric" value="{{ draft.proteinG }}" onInput="{{ setProteinG }}" placeholder="—" style="width: 100%; background: transparent; border: none; outline: none; color: #1C1C1E; font-size: 24px; font-weight: 600; padding: 0; margin-top: 2px;">
+          </div>
+        </div>
+
+        <!-- non-negotiables -->
+        <div style="font-size: 13px; color: rgba(60,60,67,0.6); font-weight: 500; margin: 22px 8px 8px; text-transform: uppercase; letter-spacing: 0.3px;">The 5 non-negotiables</div>
+        <div style="border-radius: 22px; overflow: hidden; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: 0 6px 24px rgba(150,110,70,0.1), inset 0 1px 0 rgba(255,255,255,0.85);">
+          <sc-for list="{{ nnItems }}" as="n" hint-placeholder-count="5">
+            <div style="{{ n.rowStyle }}">
+              <span style="flex: 1; font-size: 16px; color: #1C1C1E;">{{ n.label }}</span>
+              <button onClick="{{ n.onClick }}" style="{{ n.trackStyle }}">
+                <span style="{{ n.knobStyle }}"></span>
+              </button>
+            </div>
+          </sc-for>
+        </div>
+
+        <!-- score -->
+        <div style="{{ scoreCardStyle }}">
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="display: flex; align-items: baseline; font-family: 'Newsreader', serif;">
+              <span style="font-size: 40px; line-height: 1; color: {{ scoreColor }};">{{ scoreNum }}</span>
+              <span style="font-size: 19px; color: rgba(60,60,67,0.4);">/5</span>
+            </div>
+            <div style="flex: 1;">
+              <div style="font-size: 16px; font-weight: 600; color: #1C1C1E;">{{ scoreTitle }}</div>
+              <div style="font-size: 13px; color: rgba(60,60,67,0.6); line-height: 1.3; margin-top: 1px;">{{ scoreSub }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- training/run/body collapsible-ish list -->
+        <div style="font-size: 13px; color: rgba(60,60,67,0.6); font-weight: 500; margin: 22px 8px 8px; text-transform: uppercase; letter-spacing: 0.3px;">Training &amp; body</div>
+        <div style="border-radius: 22px; overflow: hidden; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: 0 6px 24px rgba(150,110,70,0.1), inset 0 1px 0 rgba(255,255,255,0.85);">
+          <div style="padding: 11px 16px; border-bottom: 0.5px solid rgba(60,60,67,0.1);">
+            <div style="font-size: 12px; color: rgba(60,60,67,0.55); margin-bottom: 3px;">Session <span style="color:rgba(60,60,67,0.35);">— note any neck / shoulder discomfort</span></div>
+            <textarea rows="2" value="{{ draft.training }}" onInput="{{ setTraining }}" placeholder="e.g. Lower body + core. Neck fine." style="width: 100%; background: transparent; border: none; outline: none; color: #1C1C1E; font-size: 16px; line-height: 1.35; padding: 0;"></textarea>
+          </div>
+          <div style="padding: 11px 16px; border-bottom: 0.5px solid rgba(60,60,67,0.1);">
+            <div style="font-size: 12px; color: rgba(60,60,67,0.55); margin-bottom: 3px;">Longest jog (min) or intervals</div>
+            <textarea rows="1" value="{{ draft.run }}" onInput="{{ setRun }}" placeholder="e.g. 2 min × 5" style="width: 100%; background: transparent; border: none; outline: none; color: #1C1C1E; font-size: 16px; line-height: 1.35; padding: 0;"></textarea>
+          </div>
+          <div style="display: flex; align-items: center; padding: 11px 16px; border-bottom: 0.5px solid rgba(60,60,67,0.1); gap: 12px;">
+            <span style="font-size: 16px; color: #1C1C1E; flex: 1;">Weight (kg)</span>
+            <input type="number" inputmode="decimal" value="{{ draft.weight }}" onInput="{{ setWeight }}" placeholder="—" style="width: 80px; text-align: right; background: transparent; border: none; outline: none; color: #1C1C1E; font-size: 16px; padding: 0;">
+          </div>
+          <div style="display: flex; align-items: center; padding: 11px 16px; gap: 12px;">
+            <span style="font-size: 16px; color: #1C1C1E; flex: 1;">Sleep / mood / stress</span>
+            <input value="{{ draft.sms }}" onInput="{{ setSms }}" placeholder="one line" style="width: 150px; text-align: right; background: transparent; border: none; outline: none; color: #1C1C1E; font-size: 15px; padding: 0;">
+          </div>
+        </div>
+
+        <div style="text-align: center; font-size: 12px; color: rgba(60,60,67,0.4); margin-top: 14px;">{{ savedNote }}</div>
+      </div>
+      </sc-if>
+
+      <!-- ===== TRENDS ===== -->
+      <sc-if value="{{ isTrends }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="padding: 4px 4px 2px;">
+          <div style="font-size: 15px; color: rgba(60,60,67,0.6); font-weight: 500;">The real scoreboard</div>
+          <div style="font-size: 34px; font-weight: 700; color: #1C1C1E; letter-spacing: 0.3px; line-height: 1.1; margin-top: 1px;">Trends</div>
+        </div>
+
+        <sc-if value="{{ hasData }}" hint-placeholder-val="{{ true }}">
+        <div>
+          <div style="margin-top: 14px; border-radius: 24px; position: relative; overflow: hidden; background: rgba(255,255,255,0.42); backdrop-filter: blur(24px) saturate(190%); -webkit-backdrop-filter: blur(24px) saturate(190%); border: 0.5px solid rgba(255,255,255,0.75); box-shadow: 0 8px 30px rgba(150,110,70,0.14), inset 0 1px 0 rgba(255,255,255,0.85); padding: 18px;">
+            <div style="font-size: 11.5px; letter-spacing: 0.5px; text-transform: uppercase; color: #C8843E; font-weight: 600;">The prize · visceral fat</div>
+            <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 8px; font-family: 'Newsreader', serif;">
+              <span style="font-size: 50px; line-height: 1; color: #1C1C1E;">14</span>
+              <span style="color: rgba(60,60,67,0.4); font-size: 20px;">→</span>
+              <span style="font-size: 50px; line-height: 1; color: #3DA876;">≤10</span>
+            </div>
+            <div style="font-size: 13px; color: rgba(60,60,67,0.6); margin-top: 8px; line-height: 1.4;">Your priority metric — the risky belly fat, and the first to drop. Retest InBody around week 10–12.</div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
+            <sc-for list="{{ statCards }}" as="s" hint-placeholder-count="4">
+              <div style="border-radius: 18px; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: inset 0 1px 0 rgba(255,255,255,0.8); padding: 13px 15px;">
+                <div style="font-size: 12px; color: rgba(60,60,67,0.6);">{{ s.label }}</div>
+                <div style="display: flex; align-items: baseline; gap: 5px; margin-top: 3px;">
+                  <span style="font-family: 'Newsreader', serif; font-size: 26px; line-height: 1; color: #1C1C1E;">{{ s.value }}</span>
+                  <span style="font-size: 12.5px; color: {{ s.deltaColor }};">{{ s.delta }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-for list="{{ charts }}" as="c" hint-placeholder-count="3">
+            <div style="margin-top: 12px; border-radius: 22px; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: 0 6px 24px rgba(150,110,70,0.1), inset 0 1px 0 rgba(255,255,255,0.85); padding: 15px 16px 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px;">
+                <div style="font-size: 14px; font-weight: 600; color: #1C1C1E;">{{ c.title }}</div>
+                <div style="font-size: 12px; color: rgba(60,60,67,0.5);">{{ c.sub }}</div>
+              </div>
+              <div>{{ c.el }}</div>
+            </div>
+          </sc-for>
+          <div style="font-size: 12px; color: rgba(60,60,67,0.5); text-align: center; line-height: 1.5; margin-top: 14px; padding: 0 12px;">The trend is the signal — daily scale noise isn’t. Waist, photos and your jog are better proof than any single morning.</div>
+        </div>
+        </sc-if>
+        <sc-if value="{{ noData }}" hint-placeholder-val="{{ false }}">
+          <div style="text-align: center; padding: 70px 24px;">
+            <div style="font-family: 'Newsreader', serif; font-size: 24px; color: #1C1C1E; margin-bottom: 8px;">Your charts grow here</div>
+            <div style="font-size: 14px; color: rgba(60,60,67,0.6); line-height: 1.5;">Log a day or two on Today and your weight trend, score and streak take shape.</div>
+          </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <!-- ===== HEALTH ===== -->
+      <sc-if value="{{ isHealth }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="padding: 4px 4px 2px;">
+          <div style="font-size: 15px; color: rgba(60,60,67,0.6); font-weight: 500;">HealthKit integration</div>
+          <div style="font-size: 34px; font-weight: 700; color: #1C1C1E; letter-spacing: 0.3px; line-height: 1.1; margin-top: 1px;">Health</div>
+        </div>
+
+        <!-- connected banner -->
+        <div style="margin-top: 14px; border-radius: 24px; position: relative; overflow: hidden; background: rgba(255,255,255,0.46); backdrop-filter: blur(24px) saturate(190%); -webkit-backdrop-filter: blur(24px) saturate(190%); border: 0.5px solid rgba(255,255,255,0.75); box-shadow: 0 8px 30px rgba(150,110,70,0.13), inset 0 1px 0 rgba(255,255,255,0.85); padding: 16px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 44px; height: 44px; border-radius: 13px; background: linear-gradient(160deg, #FF5E7A, #FB1E4B); display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 10px rgba(251,30,75,0.3);">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7.5-4.9-10-9.2C.3 8.6 1.6 4.8 5 4.1c2-.4 3.8.5 4.9 2 1.1-1.5 2.9-2.4 4.9-2 3.4.7 4.7 4.5 3 7.7C19.5 16.1 12 21 12 21z"/></svg>
+            </div>
+            <div style="flex: 1;">
+              <div style="font-size: 17px; font-weight: 600; color: #1C1C1E;">{{ hkConnectedTitle }}</div>
+              <div style="font-size: 13px; color: rgba(60,60,67,0.6); margin-top: 1px;">{{ hkConnectedSub }}</div>
+            </div>
+          </div>
+          <button onClick="{{ toggleHk }}" style="{{ hkBtnStyle }}">{{ hkBtnLabel }}</button>
+        </div>
+
+        <!-- read access -->
+        <div style="font-size: 13px; color: rgba(60,60,67,0.6); font-weight: 500; margin: 22px 8px 8px; text-transform: uppercase; letter-spacing: 0.3px;">Reading from Health</div>
+        <div style="border-radius: 22px; overflow: hidden; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: 0 6px 24px rgba(150,110,70,0.1), inset 0 1px 0 rgba(255,255,255,0.85);">
+          <sc-for list="{{ hkRead }}" as="h" hint-placeholder-count="5">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 0.5px solid rgba(60,60,67,0.1);">
+              <div style="width: 30px; height: 30px; border-radius: 8px; background: {{ h.tile }}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ h.icon }}"></path></svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 16px; color: #1C1C1E;">{{ h.label }}</div>
+                <div style="font-size: 12px; color: rgba(60,60,67,0.5);">{{ h.value }}</div>
+              </div>
+              <button onClick="{{ h.onClick }}" style="{{ h.trackStyle }}"><span style="{{ h.knobStyle }}"></span></button>
+            </div>
+          </sc-for>
+        </div>
+
+        <!-- write back -->
+        <div style="font-size: 13px; color: rgba(60,60,67,0.6); font-weight: 500; margin: 22px 8px 8px; text-transform: uppercase; letter-spacing: 0.3px;">Writing to Health</div>
+        <div style="border-radius: 22px; overflow: hidden; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: 0 6px 24px rgba(150,110,70,0.1), inset 0 1px 0 rgba(255,255,255,0.85);">
+          <sc-for list="{{ hkWrite }}" as="h" hint-placeholder-count="2">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 0.5px solid rgba(60,60,67,0.1);">
+              <div style="width: 30px; height: 30px; border-radius: 8px; background: {{ h.tile }}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ h.icon }}"></path></svg>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 16px; color: #1C1C1E;">{{ h.label }}</div>
+                <div style="font-size: 12px; color: rgba(60,60,67,0.5);">{{ h.value }}</div>
+              </div>
+              <button onClick="{{ h.onClick }}" style="{{ h.trackStyle }}"><span style="{{ h.knobStyle }}"></span></button>
+            </div>
+          </sc-for>
+          <div style="padding: 11px 16px; font-size: 12px; color: rgba(60,60,67,0.5); line-height: 1.4;">Your logged calories &amp; protein sync to the Health app so everything lives in one place.</div>
+        </div>
+        <div style="font-size: 12px; color: rgba(60,60,67,0.45); text-align: center; line-height: 1.5; margin-top: 16px; padding: 0 16px;">Data stays on your device. Win the Day never sees your Health data — iOS hands it over locally, with your permission.</div>
+      </div>
+      </sc-if>
+
+      <!-- ===== SETTINGS ===== -->
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div style="padding: 4px 4px 2px;">
+          <div style="font-size: 34px; font-weight: 700; color: #1C1C1E; letter-spacing: 0.3px; line-height: 1.1;">Settings</div>
+        </div>
+
+        <!-- Intelligence -->
+        <div style="font-size: 13px; color: rgba(60,60,67,0.6); font-weight: 500; margin: 20px 8px 8px; text-transform: uppercase; letter-spacing: 0.3px;">Intelligence</div>
+        <div style="border-radius: 22px; overflow: hidden; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: 0 6px 24px rgba(150,110,70,0.1), inset 0 1px 0 rgba(255,255,255,0.85);">
+          <button onClick="{{ toggleProviders }}" style="display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 16px; background: transparent; border: none; border-bottom: 0.5px solid rgba(60,60,67,0.1); cursor: pointer; text-align: left;">
+            <div style="width: 30px; height: 30px; border-radius: 8px; background: {{ providerTile }}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"></path></svg>
+            </div>
+            <span style="flex: 1; font-size: 16px; color: #1C1C1E;">Provider</span>
+            <span style="font-size: 16px; color: rgba(60,60,67,0.5); margin-right: 4px;">{{ providerName }}</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(60,60,67,0.3)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="{{ providerChevronStyle }}"><path d="M9 6l6 6-6 6"></path></svg>
+          </button>
+
+          <sc-if value="{{ providersOpen }}" hint-placeholder-val="{{ false }}">
+            <sc-for list="{{ providerList }}" as="p" hint-placeholder-count="4">
+              <button onClick="{{ p.onClick }}" style="display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px 12px 20px; background: rgba(230,167,101,0.06); border: none; border-bottom: 0.5px solid rgba(60,60,67,0.08); cursor: pointer; text-align: left;">
+                <div style="flex: 1;">
+                  <div style="font-size: 15.5px; color: #1C1C1E;">{{ p.name }}</div>
+                  <div style="font-size: 12px; color: rgba(60,60,67,0.5);">{{ p.tag }}</div>
+                </div>
+                <span style="{{ p.checkStyle }}">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C8843E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 6"></path></svg>
+                </span>
+              </button>
+            </sc-for>
+          </sc-if>
+
+          <div style="padding: 9px 16px 6px; font-size: 12px; color: rgba(60,60,67,0.5);">{{ modelHeader }}</div>
+          <sc-for list="{{ modelList }}" as="m" hint-placeholder-count="3">
+            <button onClick="{{ m.onClick }}" style="display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 16px; background: transparent; border: none; border-top: 0.5px solid rgba(60,60,67,0.08); cursor: pointer; text-align: left;">
+              <div style="flex: 1;">
+                <div style="font-size: 16px; color: #1C1C1E;">{{ m.name }}</div>
+                <div style="{{ m.subStyle }}">{{ m.sub }}</div>
+              </div>
+              <span style="{{ m.checkStyle }}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C8843E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 6"></path></svg>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+        <div style="font-size: 12px; color: rgba(60,60,67,0.5); margin: 7px 16px 0; line-height: 1.4;">{{ providerFootnote }}</div>
+
+        <!-- Apple Health -->
+        <div style="font-size: 13px; color: rgba(60,60,67,0.6); font-weight: 500; margin: 22px 8px 8px; text-transform: uppercase; letter-spacing: 0.3px;">Apple Health</div>
+        <div style="border-radius: 22px; overflow: hidden; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: 0 6px 24px rgba(150,110,70,0.1), inset 0 1px 0 rgba(255,255,255,0.85);">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px;">
+            <div style="width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(160deg, #FF5E7A, #FB1E4B); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M12 21s-7.5-4.9-10-9.2C.3 8.6 1.6 4.8 5 4.1c2-.4 3.8.5 4.9 2 1.1-1.5 2.9-2.4 4.9-2 3.4.7 4.7 4.5 3 7.7C19.5 16.1 12 21 12 21z"/></svg>
+            </div>
+            <span style="flex: 1; font-size: 16px; color: #1C1C1E;">Sync with Health</span>
+            <button onClick="{{ toggleHk }}" style="{{ hkSwitchTrack }}"><span style="{{ hkSwitchKnob }}"></span></button>
+          </div>
+        </div>
+
+        <!-- Daily targets -->
+        <div style="font-size: 13px; color: rgba(60,60,67,0.6); font-weight: 500; margin: 22px 8px 8px; text-transform: uppercase; letter-spacing: 0.3px;">Daily targets</div>
+        <div style="border-radius: 22px; overflow: hidden; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: 0 6px 24px rgba(150,110,70,0.1), inset 0 1px 0 rgba(255,255,255,0.85);">
+          <sc-for list="{{ targetRows }}" as="t" hint-placeholder-count="3">
+            <div style="{{ t.rowStyle }}">
+              <span style="flex: 1; font-size: 16px; color: #1C1C1E;">{{ t.label }}</span>
+              <span style="font-size: 16px; color: rgba(60,60,67,0.5);">{{ t.value }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <!-- Data -->
+        <div style="font-size: 13px; color: rgba(60,60,67,0.6); font-weight: 500; margin: 22px 8px 8px; text-transform: uppercase; letter-spacing: 0.3px;">Your data</div>
+        <div style="border-radius: 22px; overflow: hidden; background: rgba(255,255,255,0.5); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: 0 6px 24px rgba(150,110,70,0.1), inset 0 1px 0 rgba(255,255,255,0.85);">
+          <button onClick="{{ exportData }}" style="display: flex; align-items: center; width: 100%; padding: 13px 16px; background: transparent; border: none; border-bottom: 0.5px solid rgba(60,60,67,0.1); cursor: pointer; text-align: left;">
+            <span style="flex: 1; font-size: 16px; color: #1C1C1E;">Export backup (JSON)</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(60,60,67,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>
+          </button>
+          <label style="display: flex; align-items: center; width: 100%; padding: 13px 16px; border-bottom: 0.5px solid rgba(60,60,67,0.1); cursor: pointer;">
+            <span style="flex: 1; font-size: 16px; color: #1C1C1E;">Import a backup</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(60,60,67,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"></path></svg>
+            <input type="file" accept="application/json,.json" onChange="{{ importData }}" style="display: none;">
+          </label>
+          <button onClick="{{ askReset }}" style="display: flex; align-items: center; width: 100%; padding: 13px 16px; background: transparent; border: none; cursor: pointer; text-align: left;">
+            <span style="flex: 1; font-size: 16px; color: #D86B4A;">Reset all data</span>
+          </button>
+        </div>
+        <sc-if value="{{ importMsg }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size: 13px; color: #3DA876; text-align: center; margin-top: 10px;">{{ importMsg }}</div>
+        </sc-if>
+
+        <div style="text-align: center; font-size: 12px; color: rgba(60,60,67,0.4); margin-top: 22px; line-height: 1.5;">Win the Day · v1.0<br>No accounts. No backend. Your data, your device.</div>
+      </div>
+      </sc-if>
+
+    </div>
+
+    <!-- RESET SHEET -->
+    <sc-if value="{{ confirmReset }}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; inset: 0; z-index: 70; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,0.25); padding: 0 8px 12px;">
+        <div style="width: 100%; max-width: 380px;">
+          <div style="border-radius: 22px; overflow: hidden; background: rgba(248,244,238,0.86); backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); border: 0.5px solid rgba(255,255,255,0.7); margin-bottom: 8px;">
+            <div style="padding: 16px; text-align: center; border-bottom: 0.5px solid rgba(60,60,67,0.12);">
+              <div style="font-size: 15px; font-weight: 600; color: #1C1C1E; margin-bottom: 3px;">Reset all data?</div>
+              <div style="font-size: 12.5px; color: rgba(60,60,67,0.6); line-height: 1.4;">This clears every entry on this device. Export a backup first if you’re unsure.</div>
+            </div>
+            <button onClick="{{ doReset }}" style="width: 100%; padding: 15px; background: transparent; border: none; cursor: pointer; font-size: 17px; color: #D86B4A; font-weight: 500;">Clear everything</button>
+          </div>
+          <button onClick="{{ cancelReset }}" style="width: 100%; padding: 16px; border-radius: 22px; background: rgba(255,255,255,0.9); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); border: 0.5px solid rgba(255,255,255,0.7); cursor: pointer; font-size: 17px; color: #007AFF; font-weight: 600;">Keep my data</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- FLOATING GLASS TAB BAR -->
+    <div style="position: absolute; left: 14px; right: 14px; bottom: 24px; z-index: 45; height: 64px; border-radius: 30px; overflow: hidden; background: rgba(255,255,255,0.44); backdrop-filter: blur(26px) saturate(200%); -webkit-backdrop-filter: blur(26px) saturate(200%); border: 0.5px solid rgba(255,255,255,0.7); box-shadow: 0 10px 34px rgba(80,55,30,0.18), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(255,255,255,0.4); display: flex; align-items: stretch; padding: 6px;">
+      <button onClick="{{ goToday }}" style="flex: 1; position: relative; background: transparent; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 24px;">
+        <span style="{{ capToday }}"></span>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{ colToday }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: relative; z-index: 1;"><circle cx="12" cy="12" r="9"></circle><path d="M8.5 12.5l2.5 2.5 4.5-5"></path></svg>
+        <span style="font-size: 10px; color: {{ colToday }}; font-weight: 600; position: relative; z-index: 1;">Today</span>
+      </button>
+      <button onClick="{{ goTrends }}" style="flex: 1; position: relative; background: transparent; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 24px;">
+        <span style="{{ capTrends }}"></span>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{ colTrends }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: relative; z-index: 1;"><path d="M4 15l4.5-5 3.5 3.5 5.5-7"></path><path d="M4 20h16"></path></svg>
+        <span style="font-size: 10px; color: {{ colTrends }}; font-weight: 600; position: relative; z-index: 1;">Trends</span>
+      </button>
+      <button onClick="{{ goHealth }}" style="flex: 1; position: relative; background: transparent; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 24px;">
+        <span style="{{ capHealth }}"></span>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{ colHealth }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: relative; z-index: 1;"><path d="M12 20s-7-4.6-9.3-8.6C1.2 8.8 2.4 5.3 5.6 4.7c1.9-.3 3.6.5 4.6 1.9 1-1.4 2.7-2.2 4.6-1.9 3.2.6 4.4 4.1 2.9 6.7C19 15.4 12 20 12 20z"></path></svg>
+        <span style="font-size: 10px; color: {{ colHealth }}; font-weight: 600; position: relative; z-index: 1;">Health</span>
+      </button>
+      <button onClick="{{ goSettings }}" style="flex: 1; position: relative; background: transparent; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 24px;">
+        <span style="{{ capSettings }}"></span>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{ colSettings }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: relative; z-index: 1;"><path d="M5 8h10M5 8a2 2 0 104 0 2 2 0 00-4 0zM9 16h10M15 16a2 2 0 104 0 2 2 0 00-4 0z"></path></svg>
+        <span style="font-size: 10px; color: {{ colSettings }}; font-weight: 600; position: relative; z-index: 1;">Settings</span>
+      </button>
+    </div>
+
+    <!-- home indicator -->
+    <div style="position: absolute; bottom: 8px; left: 0; right: 0; z-index: 60; display: flex; justify-content: center; pointer-events: none;">
+      <div style="width: 138px; height: 5px; border-radius: 100px; background: rgba(0,0,0,0.28);"></div>
+    </div>
+
+  </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:442,&quot;height&quot;:912}}">
+const ACCENT='#E6A765', ACCENT_D='#C8843E', SAGE='#3DA876', INK='#1C1C1E', SEC='rgba(60,60,67,0.6)';
+const KEY='suhail_health_v2', SKEY='suhail_ios_settings_v1';
+const NN_DEFS=[['fajr','Prayed Fajr'],['protein','Hit protein ~120g'],['moved','Moved — gym, walk or run'],['phone','Phone off by 11–11:30pm'],['side','Started the night on my side']];
+const MEAL_DEFS=[['breakfast','Breakfast','2 egg bull\u2019s eye, ethapazham, black coffee'],['snacks','Snacks','curd, apple, few nuts'],['lunch','Lunch','rice, chicken curry, thoran'],['dinner','Dinner','2 chapati, fish curry, veg'],['drinks','Drinks / supplements','whey isolate, magnesium']];
+const TIPS=['Coffee only after solid food — never on an empty stomach.','Whey isolate in water, post-gym, is your easy protein win.','Soluble fibre firms things up: isabgol, oats, a banana.','No overhead or heavy-shrug work until the physio clears your neck.','The trend matters far more than today\u2019s number on the scale.','Minimise fried & greasy food — gut and deficit both thank you.'];
+const PROVIDERS=[
+  {id:'apple',name:'Apple Intelligence',tag:'On-device · Private',foot:'Runs privately on your iPhone or Private Cloud Compute. Nothing leaves Apple\u2019s secure path.',models:[{id:'apple-od',name:'On-Device',sub:'Fast, fully private'},{id:'apple-pcc',name:'Private Cloud Compute',sub:'Larger model, still private'}]},
+  {id:'openai',name:'OpenAI',tag:'GPT family',foot:'Meals are sent to OpenAI for estimation. Standard API privacy applies.',models:[{id:'gpt5',name:'GPT-5',sub:'Most capable'},{id:'gpt5-mini',name:'GPT-5 mini',sub:'Faster, cheaper'},{id:'gpt41',name:'GPT-4.1',sub:''}]},
+  {id:'anthropic',name:'Anthropic',tag:'Claude family',foot:'Meals are sent to Anthropic for estimation. Standard API privacy applies.',models:[{id:'opus48',name:'Claude Opus 4.8',sub:'Deepest reasoning'},{id:'sonnet46',name:'Claude Sonnet 4.6',sub:'Balanced — recommended'},{id:'haiku45',name:'Claude Haiku 4.5',sub:'Fastest'}]},
+  {id:'gemini',name:'Google Gemini',tag:'Gemini family',foot:'Meals are sent to Google for estimation. Standard API privacy applies.',models:[{id:'g31pro',name:'Gemini 3.1 Pro',sub:'Most capable'},{id:'g31flash',name:'Gemini 3.1 Flash',sub:'Fast'},{id:'g25pro',name:'Gemini 2.5 Pro',sub:''}]}
+];
+
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    let data=null; try{ const r=localStorage.getItem(KEY); if(r) data=JSON.parse(r); }catch(e){}
+    if(!data||typeof data!=='object') data={entries:{},audits:{}};
+    if(!data.entries) data.entries={}; if(!data.audits) data.audits={};
+    let settings={provider:'anthropic',model:'sonnet46',healthkit:true,hkRead:{weight:true,steps:true,energy:true,workouts:true,sleep:false},hkWrite:{calories:true,protein:true}};
+    try{ const r=localStorage.getItem(SKEY); if(r) settings=Object.assign(settings,JSON.parse(r)); }catch(e){}
+    const today=this.dstr();
+    this.state={ data, settings, tab:'today', date:today, draft:this.loadDraft(data,today), ai:{status:'idle'}, providersOpen:false, confirmReset:false, importMsg:'' };
+  }
+  dstr(d){ d=d||new Date(); const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
+  parseD(s){ return new Date(s+'T00:00:00'); }
+  blank(date){ return {date,meals:{breakfast:'',snacks:'',lunch:'',dinner:'',drinks:''},nn:{fajr:false,protein:false,moved:false,phone:false,side:false},training:'',run:'',weight:'',steps:'',bm:'',bmNote:'',sms:'',notes:'',calories:'',proteinG:'',ai:null}; }
+  loadDraft(data,date){ const e=data.entries[date]; if(e){ const b=this.blank(date); return Object.assign(b,JSON.parse(JSON.stringify(e)),{meals:Object.assign(b.meals,e.meals||{}),nn:Object.assign(b.nn,e.nn||{})}); } return this.blank(date); }
+  persist(data){ try{ localStorage.setItem(KEY,JSON.stringify(data)); }catch(e){} }
+  persistSettings(s){ try{ localStorage.setItem(SKEY,JSON.stringify(s)); }catch(e){} }
+  meaningful(d){ if(!d) return false; if(Object.values(d.meals).some(v=>(v||'').trim())) return true; if(Object.values(d.nn).some(Boolean)) return true; return ['training','run','weight','steps','sms','calories','proteinG'].some(k=>String(d[k]||'').trim()); }
+  commit(){ const data={entries:{...this.state.data.entries},audits:this.state.data.audits}; const d=this.state.draft; if(this.meaningful(d)) data.entries[d.date]=JSON.parse(JSON.stringify(d)); else delete data.entries[d.date]; this.persist(data); this.setState({data}); }
+  mut(fn){ this.setState(s=>{ const draft=JSON.parse(JSON.stringify(s.draft)); fn(draft); return {draft}; }, ()=>this.commit()); }
+  score(e){ if(!e) return 0; let s=0; const n=e.nn||{}; if(n.fajr)s++; if(n.protein||Number(e.proteinG)>=120)s++; if(n.moved)s++; if(n.phone)s++; if(n.side)s++; return s; }
+  sortedEntries(){ return Object.values(this.state.data.entries).filter(e=>e&&e.date).sort((a,b)=>a.date<b.date?-1:1); }
+  streakVal(){ const es=this.sortedEntries(); if(!es.length) return 0; const by={}; es.forEach(e=>by[e.date]=this.score(e)); let cur=new Date(),st=0; for(let i=0;i<400;i++){ const ds=this.dstr(cur); if(by[ds]!==undefined){ if(by[ds]>=3) st++; else break; } else if(st>0) break; cur.setDate(cur.getDate()-1);} return st; }
+
+  // health mock
+  hkStepsToday(){ const doy=Math.floor((this.parseD(this.state.date)-new Date(this.parseD(this.state.date).getFullYear(),0,0))/86400000); return 4200+((doy*617)%5400); }
+  hkWeight(){ const es=this.sortedEntries().filter(e=>Number(e.weight)>0); return es.length? Number(es[es.length-1].weight) : 84.3; }
+
+  async estimate(){
+    const m=this.state.draft.meals; if(!Object.values(m).some(v=>(v||'').trim())||this.state.ai.status==='loading') return;
+    this.setState({ai:{status:'loading'}});
+    const prompt=`You are a nutrition estimator for everyday Kerala / South Indian home cooking. Estimate calories and macros for this day's meals. These are Indian foods \u2014 give \u00b110\u201315% ballpark estimates and flag big-swing items in the note. Be concise.\n\nBreakfast: ${m.breakfast||'(none)'}\nSnacks: ${m.snacks||'(none)'}\nLunch: ${m.lunch||'(none)'}\nDinner: ${m.dinner||'(none)'}\nDrinks/supplements: ${m.drinks||'(none)'}\n\nRespond with ONLY a JSON object, no prose, no markdown fences, exactly:\n{"meals":[{"label":"Breakfast","calories":0,"protein":0,"carbs":0,"fat":0,"fiber":0,"note":"short"}],"total":{"calories":0,"protein":0,"carbs":0,"fat":0,"fiber":0}}\nOnly include meals with content. Whole numbers.`;
+    try{ const txt=await window.claude.complete(prompt); const json=this.parseJSON(txt); if(!json||!json.total) throw new Error('bad');
+      this.mut(d=>{ d.ai=json; if(json.total.calories) d.calories=String(Math.round(json.total.calories)); if(json.total.protein) d.proteinG=String(Math.round(json.total.protein)); });
+      this.setState({ai:{status:'done'}});
+    }catch(e){ this.setState({ai:{status:'error'}}); }
+  }
+  parseJSON(txt){ try{ let t=String(txt).trim(); const f=t.match(/```(?:json)?([\s\S]*?)```/); if(f) t=f[1].trim(); const a=t.indexOf('{'),b=t.lastIndexOf('}'); if(a>=0&&b>a) t=t.slice(a,b+1); return JSON.parse(t); }catch(e){ return null; } }
+
+  exportData(){ try{ const blob=new Blob([JSON.stringify(this.state.data,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='win-the-day-'+this.dstr()+'.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){} }
+  importData(e){ const file=e.target.files&&e.target.files[0]; if(!file) return; const r=new FileReader(); r.onload=()=>{ try{ const obj=JSON.parse(r.result); if(!obj.entries) throw new Error('shape'); const data={entries:obj.entries||{},audits:obj.audits||{}}; this.persist(data); this.setState({data,draft:this.loadDraft(data,this.state.date),importMsg:'Restored '+Object.keys(data.entries).length+' days.'}); }catch(err){ this.setState({importMsg:'That file didn\u2019t look right — nothing changed.'}); } }; r.readAsText(file); e.target.value=''; }
+  doReset(){ const data={entries:{},audits:{}}; this.persist(data); this.setState({data,draft:this.blank(this.state.date),confirmReset:false,importMsg:''}); }
+
+  setProvider(id){ const p=PROVIDERS.find(x=>x.id===id); const s=Object.assign({},this.state.settings,{provider:id,model:p.models[0].id}); this.persistSettings(s); this.setState({settings:s,providersOpen:false}); }
+  setModel(id){ const s=Object.assign({},this.state.settings,{model:id}); this.persistSettings(s); this.setState({settings:s}); }
+  toggleHk(){ const s=Object.assign({},this.state.settings,{healthkit:!this.state.settings.healthkit}); this.persistSettings(s); this.setState({settings:s}); }
+  toggleHkRead(k){ const hk=Object.assign({},this.state.settings.hkRead,{[k]:!this.state.settings.hkRead[k]}); const s=Object.assign({},this.state.settings,{hkRead:hk}); this.persistSettings(s); this.setState({settings:s}); }
+  toggleHkWrite(k){ const hk=Object.assign({},this.state.settings.hkWrite,{[k]:!this.state.settings.hkWrite[k]}); const s=Object.assign({},this.state.settings,{hkWrite:hk}); this.persistSettings(s); this.setState({settings:s}); }
+
+  // switch style helpers
+  track(on){ return {width:'51px',height:'31px',borderRadius:'16px',border:'none',padding:'2px',cursor:'pointer',flexShrink:0,display:'flex',alignItems:'center',justifyContent:on?'flex-end':'flex-start',background:on?SAGE:'rgba(120,120,128,0.18)',transition:'all 0.28s cubic-bezier(.3,1.3,.5,1)',boxShadow:on?'inset 0 0 0 0.5px rgba(0,0,0,0.04)':'inset 0 0 0 0.5px rgba(0,0,0,0.06)'}; }
+  knob(){ return {width:'27px',height:'27px',borderRadius:'50%',background:'#fff',boxShadow:'0 2px 5px rgba(0,0,0,0.2), 0 0 1px rgba(0,0,0,0.1)',display:'block'}; }
+  glassCap(active){ return active? {position:'absolute',inset:'2px',borderRadius:'22px',background:'rgba(230,167,101,0.22)',border:'0.5px solid rgba(230,167,101,0.45)',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.6)',zIndex:0} : {display:'none'}; }
+
+  renderVals(){
+    const st=this.state, d=st.draft, sc=this.score(d), tab=st.tab, S=st.settings;
+    const isToday=tab==='today';
+    const today0=this.dstr();
+    const todaySub=this.parseD(st.date).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+
+    // meals
+    const mealFields=MEAL_DEFS.map(([k,label,ph])=>({label,ph,value:d.meals[k]||'',onInput:e=>this.mut(x=>{x.meals[k]=e.target.value;})}));
+    const aiSt=st.ai.status;
+    const estimateLabel=aiSt==='loading'?'Estimating your day…':(d.ai?'Re-estimate my day':'Estimate my day');
+    const estimateBtnStyle={width:'100%',padding:'12px',borderRadius:'14px',border:'none',cursor:aiSt==='loading'?'default':'pointer',fontSize:'15px',fontWeight:600,color:'#fff',background:'linear-gradient(180deg, #ECB477, #E29A4E)',boxShadow:'0 3px 10px rgba(214,148,70,0.35), inset 0 1px 0 rgba(255,255,255,0.5)',animation:aiSt==='loading'?'glasspulse 1.2s ease-in-out infinite':'none'};
+    const ai=d.ai;
+    const aiMeals=ai&&ai.meals?ai.meals.map(r=>({label:r.label||'Meal',note:r.note||'',cal:Math.round(r.calories||0)+' kcal',macros:'P'+Math.round(r.protein||0)+' · C'+Math.round(r.carbs||0)+' · F'+Math.round(r.fat||0)})):[];
+    const aiTotalLine=ai&&ai.total?Math.round(ai.total.calories||0)+' kcal · '+Math.round(ai.total.protein||0)+'g protein':'';
+    const curProv=PROVIDERS.find(p=>p.id===S.provider)||PROVIDERS[2];
+    const curModel=(curProv.models.find(m=>m.id===S.model)||curProv.models[0]);
+    const aiModelLine='Estimated by '+curModel.name;
+
+    // non-negotiables (switches)
+    const pg=Number(d.proteinG);
+    const nnItems=NN_DEFS.map(([key,label],i)=>{ const active=key==='protein'?(d.nn.protein||pg>=120):d.nn[key];
+      return {key,label,onClick:()=>this.mut(x=>{x.nn[key]=!x.nn[key];}),
+        rowStyle:{display:'flex',alignItems:'center',padding:'13px 16px',borderBottom:i<4?'0.5px solid rgba(60,60,67,0.1)':'none'},
+        trackStyle:this.track(active),knobStyle:this.knob()}; });
+
+    const msgs={5:['Perfect day 🔥','All five. This is exactly it.',ACCENT_D],4:['Strong day','Chain’s alive and humming.',SAGE],3:['Solid — chain’s alive','You showed up. That’s the scoreboard.',SAGE],2:['Tough day, but you showed up','A floor on your worst day still counts.',SEC],1:['You still showed up','One brick beats none. Back at it tomorrow.',SEC],0:['Tomorrow’s a fresh start','No shame here. The chain forgives a link.',SEC]};
+    const sm=msgs[sc];
+    const scoreCardStyle={marginTop:'14px',borderRadius:'22px',background:sc>=3?'rgba(61,168,118,0.1)':'rgba(255,255,255,0.5)',backdropFilter:'blur(22px)',WebkitBackdropFilter:'blur(22px)',border:'0.5px solid '+(sc>=3?'rgba(61,168,118,0.3)':'rgba(255,255,255,0.7)'),boxShadow:'inset 0 1px 0 rgba(255,255,255,0.8)',padding:'16px'};
+
+    const doy=Math.floor((this.parseD(st.date)-new Date(this.parseD(st.date).getFullYear(),0,0))/86400000);
+    const tipText=TIPS[doy%TIPS.length];
+
+    // health card
+    const hkOn=S.healthkit;
+    const healthSteps=hkOn?this.hkStepsToday().toLocaleString('en-US'):'—';
+    const healthWeight=hkOn?this.hkWeight().toFixed(1)+' kg':'—';
+
+    // trends
+    const es=this.sortedEntries(); const hasData=es.length>0;
+    const baselineWeight=84.3, baselineDate='2026-06-18';
+    const weightPts=es.filter(e=>Number(e.weight)>0).map(e=>({x:e.date,y:Number(e.weight)}));
+    const weightSeries=[{x:baselineDate,y:baselineWeight}].concat(weightPts.filter(p=>p.x!==baselineDate));
+    const latestW=weightPts.length?weightPts[weightPts.length-1].y:baselineWeight;
+    const wChange=latestW-baselineWeight;
+    const scores=es.map(e=>this.score(e)); const avgScore=scores.length?scores.reduce((a,b)=>a+b,0)/scores.length:0;
+    const days5=scores.filter(s=>s===5).length, days3=scores.filter(s=>s>=3).length;
+    const cons5=scores.length?Math.round(days5/scores.length*100):0;
+    const proteinPts=es.filter(e=>Number(e.proteinG)>0).map(e=>({y:Number(e.proteinG)}));
+    const calPts=es.filter(e=>Number(e.calories)>0).map(e=>({y:Number(e.calories)}));
+    const stepsPts=es.filter(e=>Number(e.steps)>0).map(e=>({y:Number(e.steps)}));
+    const jogPts=es.map(e=>{ const m=String(e.run||'').match(/(\d+(?:\.\d+)?)\s*min/i)||String(e.run||'').match(/^(\d+(?:\.\d+)?)$/); return m?{y:Number(m[1])}:null; }).filter(Boolean);
+    const statCards=[
+      {label:'Weight now',value:latestW.toFixed(1),delta:(wChange<=0?'▾ ':'▴ ')+Math.abs(wChange).toFixed(1)+'kg',deltaColor:wChange<=0?SAGE:SEC},
+      {label:'Avg score',value:avgScore.toFixed(1),delta:'/5',deltaColor:SEC},
+      {label:'5/5 days',value:String(days5),delta:cons5+'%',deltaColor:SAGE},
+      {label:'Streak',value:String(this.streakVal()),delta:'days',deltaColor:ACCENT_D}
+    ];
+    const charts=[];
+    charts.push({title:'Weight trend',sub:latestW.toFixed(1)+' kg',el:this.lineChart(weightSeries.map(p=>({y:p.y})),{color:ACCENT})});
+    if(scores.length) charts.push({title:'Daily score',sub:'streak '+this.streakVal()+'d',el:this.barChart(es.map(e=>({y:this.score(e),color:this.score(e)>=3?SAGE:'#D9CFC2'})),{max:5})});
+    if(proteinPts.length) charts.push({title:'Protein',sub:'target 120g',el:this.lineChart(proteinPts,{color:SAGE,target:120})});
+    if(calPts.length) charts.push({title:'Calories',sub:'target 2000',el:this.lineChart(calPts,{color:ACCENT,target:2000})});
+    if(stepsPts.length) charts.push({title:'Steps',sub:'aim 7–10k',el:this.barChart(stepsPts,{color:SAGE,target:8000})});
+    if(jogPts.length) charts.push({title:'Longest jog',sub:'building to 20–30 min',el:this.lineChart(jogPts,{color:ACCENT})});
+
+    // health screen rows
+    const W='#fff';
+    const hkRead=[
+      {key:'weight',label:'Body Mass',value:hkOn?'Last: '+this.hkWeight().toFixed(1)+' kg':'Off',tile:'linear-gradient(160deg,#7AC0FF,#1E8AE0)',icon:'M12 3a4 4 0 100 8 4 4 0 000-8z M5 21c0-4 3-6 7-6s7 2 7 6'},
+      {key:'steps',label:'Steps',value:hkOn?'Today: '+this.hkStepsToday().toLocaleString('en-US'):'Off',tile:'linear-gradient(160deg,#FF9E6B,#F4631E)',icon:'M7 4v8a3 3 0 006 0 M7 4l-1 12 M17 20v-8a3 3 0 00-6 0 M17 20l1-12'},
+      {key:'energy',label:'Active Energy',value:hkOn?'Today: 412 kcal':'Off',tile:'linear-gradient(160deg,#FF6FA0,#FB1E5B)',icon:'M12 3c2 4-2 5 0 9 M12 21a6 6 0 006-6c0-4-3-6-6-12-3 6-6 8-6 12a6 6 0 006 6z'},
+      {key:'workouts',label:'Workouts',value:hkOn?'This week: 4':'Off',tile:'linear-gradient(160deg,#5FE08A,#16B45A)',icon:'M6 9v6 M18 9v6 M4 11v2 M20 11v2 M6 12h12'},
+      {key:'sleep',label:'Sleep Analysis',value:hkOn&&S.hkRead.sleep?'Last: 7h 10m':'Off',tile:'linear-gradient(160deg,#9D8CFF,#5B43E0)',icon:'M20 14a8 8 0 11-9.5-9.8A6.5 6.5 0 0020 14z'}
+    ].map(r=>{ const on=hkOn&&S.hkRead[r.key]; return Object.assign(r,{onClick:()=>this.toggleHkRead(r.key),trackStyle:this.track(on),knobStyle:this.knob()}); });
+    const hkWrite=[
+      {key:'calories',label:'Dietary Energy',value:'Writes your logged calories',tile:'linear-gradient(160deg,#FFC36B,#F0961E)',icon:'M12 3v18 M5 8h14 M5 16h14'},
+      {key:'protein',label:'Dietary Protein',value:'Writes your logged protein',tile:'linear-gradient(160deg,#7AD7B0,#16A06A)',icon:'M4 12h16 M8 8l-4 4 4 4 M16 8l4 4-4 4'}
+    ].map(r=>{ const on=hkOn&&S.hkWrite[r.key]; return Object.assign(r,{onClick:()=>this.toggleHkWrite(r.key),trackStyle:this.track(on),knobStyle:this.knob()}); });
+
+    // settings provider/model
+    const providerList=PROVIDERS.map(p=>({id:p.id,name:p.name,tag:p.tag,onClick:()=>this.setProvider(p.id),checkStyle:{display:p.id===S.provider?'flex':'none',alignItems:'center'}}));
+    const modelList=curProv.models.map(m=>({id:m.id,name:m.name,sub:m.sub||'',onClick:()=>this.setModel(m.id),subStyle:{fontSize:'12px',color:'rgba(60,60,67,0.5)',display:m.sub?'block':'none'},checkStyle:{display:m.id===S.model?'flex':'none',alignItems:'center'}}));
+    const provTiles={apple:'linear-gradient(160deg,#B0B0B5,#6E6E73)',openai:'linear-gradient(160deg,#3FC8A8,#10A37F)',anthropic:'linear-gradient(160deg,#E6A765,#C8632E)',gemini:'linear-gradient(160deg,#6FA8FF,#3B6CF0)'};
+
+    const targetRows=[
+      {label:'Calories',value:'2,000 kcal'},
+      {label:'Protein',value:'120–130 g'},
+      {label:'Steps',value:'7–10k'}
+    ].map((t,i,arr)=>Object.assign(t,{rowStyle:{display:'flex',alignItems:'center',padding:'13px 16px',borderBottom:i<arr.length-1?'0.5px solid rgba(60,60,67,0.1)':'none'}}));
+
+    // tab colors + capsules
+    const col=t=>tab===t?ACCENT_D:'#8A8A8E';
+
+    return {
+      isToday, isTrends:tab==='trends', isHealth:tab==='health', isSettings:tab==='settings',
+      todaySub, tipText, mealFields,
+      estimate:()=>this.estimate(), estimateLabel, estimateBtnStyle,
+      hasAi:!!ai, aiMeals, aiTotalLine, aiModelLine, aiError:aiSt==='error',
+      draft:d, setCalories:e=>this.mut(x=>{x.calories=e.target.value;}), setProteinG:e=>this.mut(x=>{x.proteinG=e.target.value;}),
+      setTraining:e=>this.mut(x=>{x.training=e.target.value;}), setRun:e=>this.mut(x=>{x.run=e.target.value;}), setWeight:e=>this.mut(x=>{x.weight=e.target.value;}), setSms:e=>this.mut(x=>{x.sms=e.target.value;}),
+      nnItems, scoreNum:sc, scoreColor:sm[2], scoreTitle:sm[0], scoreSub:sm[1], scoreCardStyle,
+      savedNote:this.meaningful(d)?'Saved automatically':'Start logging — it saves as you go',
+      healthStatus:hkOn?'Connected':'Not connected', healthSyncedAt:hkOn?'Synced now':'', healthSteps, healthWeight,
+      // trends
+      hasData, noData:!hasData, statCards, charts,
+      // health screen
+      hkConnectedTitle:hkOn?'Connected to Health':'Health is off', hkConnectedSub:hkOn?'Win the Day can read and write the data below.':'Turn on to sync weight, steps and more.',
+      hkBtnStyle:{marginTop:'13px',width:'100%',padding:'11px',borderRadius:'13px',border:'none',cursor:'pointer',fontSize:'14.5px',fontWeight:600,color:hkOn?ACCENT_D:'#fff',background:hkOn?'rgba(230,167,101,0.16)':'linear-gradient(180deg,#ECB477,#E29A4E)',boxShadow:hkOn?'none':'0 3px 10px rgba(214,148,70,0.3)'},
+      hkBtnLabel:hkOn?'Manage permissions':'Connect Apple Health',
+      hkRead, hkWrite, toggleHk:()=>this.toggleHk(),
+      // settings
+      providerName:curProv.name, providerTile:provTiles[S.provider], providersOpen:st.providersOpen, toggleProviders:()=>this.setState({providersOpen:!st.providersOpen}),
+      providerChevronStyle:{transform:st.providersOpen?'rotate(90deg)':'none',transition:'transform 0.2s'},
+      providerList, modelList, modelHeader:curProv.name+' models', providerFootnote:curProv.foot,
+      hkSwitchTrack:this.track(hkOn), hkSwitchKnob:this.knob(),
+      targetRows,
+      exportData:()=>this.exportData(), importData:e=>this.importData(e), importMsg:st.importMsg,
+      askReset:()=>this.setState({confirmReset:true}), cancelReset:()=>this.setState({confirmReset:false}), doReset:()=>this.doReset(), confirmReset:st.confirmReset,
+      // nav
+      goToday:()=>this.setState({tab:'today'}), goTrends:()=>this.setState({tab:'trends'}), goHealth:()=>this.setState({tab:'health'}), goSettings:()=>this.setState({tab:'settings'}),
+      colToday:col('today'), colTrends:col('trends'), colHealth:col('health'), colSettings:col('settings'),
+      capToday:this.glassCap(tab==='today'), capTrends:this.glassCap(tab==='trends'), capHealth:this.glassCap(tab==='health'), capSettings:this.glassCap(tab==='settings')
+    };
+  }
+
+  lineChart(series,opts){ opts=opts||{}; const h=React.createElement; const W=320,H=opts.height||110,pad=10,padB=8; if(!series.length) return null; const ys=series.map(p=>p.y); let mn=Math.min(...ys),mx=Math.max(...ys); if(opts.target!=null){mn=Math.min(mn,opts.target);mx=Math.max(mx,opts.target);} if(mn===mx){mn-=1;mx+=1;} const py=(mx-mn)*0.15; mn-=py; mx+=py; const X=i=>series.length<=1?W/2:pad+i/(series.length-1)*(W-2*pad); const Y=v=>pad+(1-(v-mn)/(mx-mn))*(H-pad-padB); const pts=series.map((p,i)=>[X(i),Y(p.y)]); const dpath=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' '); const area=dpath+' L '+pts[pts.length-1][0].toFixed(1)+' '+(H-padB)+' L '+pts[0][0].toFixed(1)+' '+(H-padB)+' Z'; const col=opts.color||ACCENT; const gid='g'+Math.random().toString(36).slice(2,7); const kids=[]; kids.push(h('defs',{key:'d'},h('linearGradient',{id:gid,x1:0,y1:0,x2:0,y2:1},h('stop',{offset:'0%',stopColor:col,stopOpacity:0.3}),h('stop',{offset:'100%',stopColor:col,stopOpacity:0})))); if(opts.target!=null){ const ty=Y(opts.target); kids.push(h('line',{key:'t',x1:pad,y1:ty,x2:W-pad,y2:ty,stroke:'rgba(60,60,67,0.4)',strokeWidth:1,strokeDasharray:'3 4'})); } kids.push(h('path',{key:'a',d:area,fill:'url(#'+gid+')'})); kids.push(h('path',{key:'l',d:dpath,fill:'none',stroke:col,strokeWidth:2.4,strokeLinecap:'round',strokeLinejoin:'round'})); const lp=pts[pts.length-1]; kids.push(h('circle',{key:'c',cx:lp[0],cy:lp[1],r:3.6,fill:col,stroke:'#fff',strokeWidth:2})); return h('svg',{viewBox:'0 0 '+W+' '+H,style:{width:'100%',height:'auto',display:'block'}},kids); }
+  barChart(series,opts){ opts=opts||{}; const h=React.createElement; const W=320,H=opts.height||100,pad=8,padB=6,gap=series.length>14?2:4; if(!series.length) return null; const max=Math.max(opts.max||0,...series.map(p=>p.y),1); const n=series.length; const bw=(W-2*pad-(n-1)*gap)/n; const kids=[]; series.forEach((p,i)=>{ const bh=Math.max(2,(p.y/max)*(H-pad-padB)); const x=pad+i*(bw+gap); const y=H-padB-bh; kids.push(h('rect',{key:i,x,y,width:bw,height:bh,rx:Math.min(3,bw/2),fill:p.color||opts.color||ACCENT})); }); if(opts.target!=null){ const ty=H-padB-(opts.target/max)*(H-pad-padB); kids.push(h('line',{key:'t',x1:pad,y1:ty,x2:W-pad,y2:ty,stroke:'rgba(60,60,67,0.4)',strokeWidth:1,strokeDasharray:'3 4'})); } return h('svg',{viewBox:'0 0 '+W+' '+H,style:{width:'100%',height:'auto',display:'block'}},kids); }
+}
+</script>
+</body>
+</html>

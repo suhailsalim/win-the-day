@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# OpenWolf (per-developer project intelligence; regenerate with `openwolf init` / `openwolf scan`)
+.wolf/
+
+# Secrets — never commit. API keys live in the device Keychain at runtime, not in the repo.
+*.key
+secrets.plist

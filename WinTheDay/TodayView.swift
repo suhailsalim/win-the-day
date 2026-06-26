@@ -1,0 +1,1354 @@
+import SwiftUI
+import PhotosUI
+
+struct TodayView: View {
+    @EnvironmentObject var store: AppStore
+    @EnvironmentObject var health: HealthManager
+    @EnvironmentObject var prayer: PrayerManager
+    @EnvironmentObject var hydration: HydrationManager
+    @EnvironmentObject var studyTimer: StudyTimer
+    @EnvironmentObject var fasting: FastingManager
+    @EnvironmentObject var weather: WeatherManager
+    @State private var showCatalog = false
+    @State private var showHistory = false
+    @State private var showQibla = false
+    @State private var showHabits = false
+    @State private var showStudy = false
+    @State private var showChat = false
+    @State private var showWorkout = false
+    @State private var editWorkout: Workout?
+    @State private var editingTimeKey: MealKey?
+    @State private var photoItem: PhotosPickerItem?
+
+    private struct MealKey: Identifiable { let id: String }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            dateHeader
+            tipCard
+            ForEach(store.modules.orderedKeys, id: \.self) { key in
+                moduleView(key)
+            }
+
+            Text(store.draft.isMeaningful ? "Saved automatically" : "Start logging — it saves as you go")
+                .font(.system(size: 12))
+                .foregroundStyle(Color(white: 0.27).opacity(0.4))
+                .frame(maxWidth: .infinity)
+                .padding(.top, 14)
+        }
+        .sheet(isPresented: $showCatalog) { CatalogView() }
+        .sheet(isPresented: $showHistory) { HistoryView() }
+        .sheet(isPresented: $showQibla) { QiblaView() }
+        .sheet(isPresented: $showHabits) { HabitsEditorView() }
+        .sheet(isPresented: $showStudy) { StudyManageView() }
+        .sheet(isPresented: $showChat) { CoachChatView() }
+        .sheet(isPresented: $showWorkout) { WorkoutView() }
+        .sheet(item: $editWorkout) { w in WorkoutView(editing: w) }
+        .sheet(item: $editingTimeKey) { mk in mealTimeSheet(mk.id) }
+        .task { await store.refreshSuggestion() }
+        .task { prayer.start() }
+        .task { weather.start(); store.weatherContext = weather.plannerSummary }
+        .task { hydration.start(); store.publishSnapshot() }
+        .task(id: store.date) {
+            await health.loadForDay(store.date)
+            if store.isToday {
+                await health.refresh()
+                store.autofillWeight(health.weightToday)
+                store.autofillActivity(steps: health.stepsToday, activeKcal: health.activeEnergyToday)
+            }
+            await store.computeReadiness(for: store.date, health: health)
+        }
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let img = UIImage(data: data) {
+                    store.addPhoto(img)
+                }
+                photoItem = nil
+            }
+        }
+    }
+
+    // MARK: - Hydration
+
+    private var hydrationSection: some View {
+        let target = max(1, hydration.targetMl)
+        let progress = Double(store.waterMl) / Double(target)
+        return HStack(spacing: 16) {
+            WaterBottleView(progress: progress, currentMl: store.waterMl, targetMl: hydration.targetMl)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(progress >= 1 ? "Target hit — nice 💧" : "\(max(0, hydration.targetMl - store.waterMl)) ml to go")
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                HStack(spacing: 8) {
+                    waterButton("+\(hydration.glassMl)") { store.addWater(hydration.glassMl) }
+                    waterButton("+500") { store.addWater(500) }
+                }
+                HStack(spacing: 8) {
+                    waterButton("Glass") { store.addWater(hydration.glassMl) }
+                    if store.waterMl > 0 {
+                        waterButton("−\(hydration.glassMl)") { store.addWater(-hydration.glassMl) }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .glassList()
+    }
+
+    private func waterButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0x1E8AE0))
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(Capsule().fill(Color(hex: 0x6FB7FF).opacity(0.18))
+                    .overlay(Capsule().strokeBorder(Color(hex: 0x2E8AE0).opacity(0.35), lineWidth: 0.5)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Meal nudge (time-aware)
+
+    @ViewBuilder private var mealNudgeBanner: some View {
+        if store.isToday, let nudge = store.mealNudge {
+            HStack(spacing: 8) {
+                Image(systemName: "clock.fill").font(.system(size: 12)).foregroundStyle(Theme.accentDark)
+                Text("Around now — jot down \(nudge.label) while it\u{2019}s fresh.")
+                    .font(.system(size: 13)).foregroundStyle(Theme.tipText)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 13).padding(.vertical, 9)
+            .background(RoundedRectangle(cornerRadius: 14).fill(Theme.tipBG)
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.tipBorder, lineWidth: 0.5)))
+            .padding(.bottom, 8)
+        }
+    }
+
+    // MARK: - Photos
+
+    private var photosSection: some View {
+        let hasPhotos = !store.draft.photos.isEmpty
+        return VStack(spacing: 10) {
+            if hasPhotos {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(store.draft.photos, id: \.self) { name in
+                            if let img = PhotoStore.load(name) {
+                                Image(uiImage: img).resizable().scaledToFill()
+                                    .frame(width: 100, height: 130).clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    .overlay(alignment: .topTrailing) {
+                                        Button { store.removePhoto(name) } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 18)).foregroundStyle(.white, .black.opacity(0.4))
+                                                .padding(5)
+                                        }
+                                    }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                }
+            }
+            PhotosPicker(selection: $photoItem, matching: .images) {
+                HStack(spacing: 9) {
+                    Image(systemName: "camera.fill").foregroundStyle(Theme.accentDark)
+                    Text(hasPhotos ? "Add another photo" : "Add a progress photo for this day")
+                        .font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink)
+                    Spacer()
+                }
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .glassList()
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Module dispatch (renders sections in the user's chosen order)
+
+    @ViewBuilder private func moduleView(_ key: String) -> some View {
+        if store.modules.enabled(key) {
+            switch key {
+            case "coach": coachCard
+            case "weather": weatherModule
+            case "prayer": prayerCard
+            case "fasting": fastingModule
+            case "sleep": sleepModule
+            case "health": healthCard
+            case "meals": mealsModule
+            case "hydration": hydrationModule
+            case "quickLog": quickLog
+            case "habits": habitsSection
+            case "score": scoreCard
+            case "workStudy": studySection
+            case "training": trainingModule
+            case "photos": photosModule
+            default: EmptyView()
+            }
+        }
+    }
+
+    @ViewBuilder private var mealsModule: some View {
+        HStack {
+            SectionHeader(text: "What you ate", color: store.moduleColor("meals"))
+            Spacer()
+            if store.isToday && !store.draft.meals.hasAny && store.hasPriorMeals {
+                Button { store.repeatPreviousMeals() } label: {
+                    Label("Repeat last day", systemImage: "arrow.counterclockwise")
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                }
+                .padding(.trailing, 8).padding(.top, 22)
+            }
+        }
+        mealNudgeBanner
+        mealsCard
+        aiResult
+        totals
+    }
+
+    @ViewBuilder private var hydrationModule: some View {
+        SectionHeader(text: "Hydration", color: store.moduleColor("hydration"))
+        hydrationSection
+    }
+
+    // MARK: - Weather
+
+    @ViewBuilder private var weatherModule: some View {
+        if store.isToday, let n = weather.now {
+            let cond = WeatherManager.condition(n.code)
+            let advice = weather.outdoorAdvice()
+            GlassCard(padding: 14, cornerRadius: 20, tint: Color(hex: 0x2E8AE0).opacity(0.10)) {
+                HStack(spacing: 13) {
+                    Image(systemName: cond.symbol)
+                        .font(.system(size: 30)).foregroundStyle(Color(hex: 0x2E8AE0))
+                        .frame(width: 44)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("\(Int(n.tempC))°").font(.system(size: 20, weight: .bold)).foregroundStyle(Theme.ink)
+                            Text(cond.label).font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
+                            if !weather.place.isEmpty {
+                                Text("· \(weather.place)").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                            }
+                        }
+                        HStack(spacing: 5) {
+                            Image(systemName: advice.ok ? "figure.walk" : "house.fill")
+                                .font(.system(size: 11)).foregroundStyle(advice.ok ? Theme.sage : Color(hex: 0xD86B4A))
+                            Text(advice.headline).font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(advice.ok ? Theme.sage : Color(hex: 0xD86B4A))
+                        }
+                        Text(advice.detail).font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.top, 14)
+        }
+    }
+
+    // MARK: - Sleep & readiness
+
+    @ViewBuilder private var sleepModule: some View {
+        if let s = store.draft.sleep, store.draft.readiness > 0 {
+            SectionHeader(text: "Sleep & readiness", color: store.moduleColor("sleep"))
+            GlassCard(padding: 16) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 16) {
+                        readinessRing(store.draft.readiness)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(readinessWord(store.draft.readiness)).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
+                            Text(String(format: "%.1fh asleep · sleep score %d", s.asleepHours, store.draft.sleepScore))
+                                .font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
+                            if let bed = s.bedDate, let wake = s.wakeDate {
+                                Text("\(clockStr(bed)) → \(clockStr(wake))").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                            }
+                        }
+                        Spacer()
+                    }
+                    if s.hasStages { sleepStageBars(s) }
+                    if !store.readinessFactors.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(store.readinessFactors.prefix(4)) { f in
+                                HStack(spacing: 6) {
+                                    if f.delta != 0 {
+                                        Text(f.delta > 0 ? "+\(f.delta)" : "\(f.delta)")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundStyle(f.delta > 0 ? Theme.sage : Color(hex: 0xD86B4A))
+                                            .frame(width: 28, alignment: .leading)
+                                    } else {
+                                        Image(systemName: "circle.fill").font(.system(size: 5)).foregroundStyle(Theme.tertiaryInk).frame(width: 28, alignment: .leading)
+                                    }
+                                    Text("\(f.label) — \(f.note)").font(.system(size: 12)).foregroundStyle(Theme.secondaryInk)
+                                    Spacer(minLength: 0)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.top, 14)
+        }
+    }
+
+    private func readinessRing(_ score: Int) -> some View {
+        ZStack {
+            Circle().stroke(Color(white: 0.5).opacity(0.15), lineWidth: 7)
+            Circle().trim(from: 0, to: CGFloat(score) / 100)
+                .stroke(score >= 70 ? Theme.sage : (score >= 45 ? Theme.accentDark : Color(hex: 0xD86B4A)),
+                        style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            VStack(spacing: 0) {
+                Text("\(score)").font(Theme.serif(24)).foregroundStyle(Theme.ink)
+                Text("ready").font(.system(size: 9)).foregroundStyle(Theme.tertiaryInk)
+            }
+        }
+        .frame(width: 66, height: 66)
+    }
+
+    private func sleepStageBars(_ s: SleepBreakdown) -> some View {
+        let total = max(1, s.deepMin + s.remMin + s.coreMin + s.awakeMin)
+        return VStack(alignment: .leading, spacing: 4) {
+            GeometryReader { geo in
+                HStack(spacing: 2) {
+                    stageBar(geo.size.width, s.deepMin / total, Color(hex: 0x3B43C0))
+                    stageBar(geo.size.width, s.remMin / total, Color(hex: 0x6E7BFF))
+                    stageBar(geo.size.width, s.coreMin / total, Color(hex: 0x9DB0FF))
+                    stageBar(geo.size.width, s.awakeMin / total, Color(hex: 0xE0C089))
+                }
+            }
+            .frame(height: 8)
+            HStack(spacing: 10) {
+                stageLegend("Deep", Color(hex: 0x3B43C0), s.deepMin)
+                stageLegend("REM", Color(hex: 0x6E7BFF), s.remMin)
+                stageLegend("Core", Color(hex: 0x9DB0FF), s.coreMin)
+            }
+        }
+    }
+    private func stageBar(_ width: CGFloat, _ frac: Double, _ color: Color) -> some View {
+        Capsule().fill(color).frame(width: max(0, width * frac), height: 8)
+    }
+    private func stageLegend(_ name: String, _ color: Color, _ mins: Double) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text("\(name) \(Int(mins))m").font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk)
+        }
+    }
+    private func readinessWord(_ s: Int) -> String {
+        s >= 80 ? "Primed" : (s >= 65 ? "Ready" : (s >= 45 ? "Moderate" : "Take it easy"))
+    }
+    private func clockStr(_ d: Date) -> String {
+        let f = DateFormatter(); f.dateFormat = "h:mm a"; return f.string(from: d)
+    }
+
+    // MARK: - Fasting
+
+    @ViewBuilder private var fastingModule: some View {
+        SectionHeader(text: prayer.ramadanMode ? "Fasting · Ramadan" : "Fasting",
+                      color: store.moduleColor("fasting"))
+        if prayer.ramadanMode { ramadanCard }
+        fastingTimerCard
+    }
+
+    private var ramadanCard: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { ctx in
+            let now = ctx.date
+            let inWindow = isFastingWindow(now)
+            GlassCard(padding: 16, cornerRadius: 20, tint: Color(hex: 0xC8843E).opacity(0.12)) {
+                HStack(spacing: 13) {
+                    IconTile(symbol: "moon.stars.fill", colors: [Color(hex: 0xE6A765), Color(hex: 0xC8632E)], size: 36, corner: 11)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(inWindow ? "Iftar in \(countdown(to: prayer.iftar, from: now))"
+                                      : "Suhoor ends in \(countdown(to: prayer.suhoorEnd, from: now))")
+                            .font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
+                        HStack(spacing: 10) {
+                            Text("Suhoor \(timeStr(prayer.suhoorEnd))").font(.system(size: 12.5)).foregroundStyle(Theme.secondaryInk)
+                            Text("Iftar \(timeStr(prayer.iftar))").font(.system(size: 12.5)).foregroundStyle(Theme.secondaryInk)
+                        }
+                    }
+                    Spacer()
+                }
+            }
+            .padding(.bottom, 4)
+        }
+    }
+
+    private var fastingTimerCard: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+            let now = ctx.date
+            let elapsed = fasting.elapsedHours(now: now)
+            let progress = fasting.progress(now: now)
+            GlassCard(padding: 16) {
+                VStack(spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(fasting.isFasting ? "Fasting" : "Not fasting")
+                                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                            Text("\(fasting.protocolName == "custom" ? "\(Int(fasting.targetHours))h" : fasting.protocolName) window · streak \(fasting.streak())d")
+                                .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                        }
+                        Spacer()
+                        Button {
+                            if fasting.isFasting { fasting.endFast() } else { fasting.startFast() }
+                        } label: {
+                            Text(fasting.isFasting ? "End fast" : "Start fast")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(fasting.isFasting ? Theme.accentDark : .white)
+                                .padding(.horizontal, 16).padding(.vertical, 9)
+                                .background(Capsule().fill(fasting.isFasting ? AnyShapeStyle(Color.white.opacity(0.6)) : AnyShapeStyle(Theme.accentDark)))
+                                .overlay(Capsule().strokeBorder(Theme.accent.opacity(fasting.isFasting ? 0.4 : 0), lineWidth: 0.5))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if fasting.isFasting {
+                        VStack(spacing: 5) {
+                            HStack {
+                                Text(String(format: "%.1fh", elapsed)).font(Theme.serif(24)).foregroundStyle(Theme.ink)
+                                Text("of \(Int(fasting.targetHours))h").font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
+                                Spacer()
+                                Text("\(Int(progress * 100))%").font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(progress >= 1 ? Theme.sage : Theme.accentDark)
+                            }
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color(white: 0.5).opacity(0.15)).frame(height: 8)
+                                    Capsule().fill(progress >= 1 ? Theme.sage : Theme.accentDark)
+                                        .frame(width: geo.size.width * progress, height: 8)
+                                }
+                            }
+                            .frame(height: 8)
+                        }
+                    }
+                }
+            }
+            .padding(.bottom, 4)
+        }
+    }
+
+    private func isFastingWindow(_ now: Date) -> Bool {
+        guard let fajr = prayer.suhoorEnd, let maghrib = prayer.iftar else { return false }
+        return now >= fajr && now < maghrib
+    }
+
+    private func countdown(to date: Date?, from now: Date) -> String {
+        guard let date else { return "—" }
+        var secs = Int(date.timeIntervalSince(now))
+        if secs < 0 { secs += 24 * 3600 }   // wrap to tomorrow for display
+        let h = secs / 3600, m = (secs % 3600) / 60
+        return h > 0 ? "\(h)h \(m)m" : "\(m)m"
+    }
+
+    private func timeStr(_ date: Date?) -> String {
+        guard let date else { return "—" }
+        let f = DateFormatter(); f.dateFormat = "h:mm a"
+        return f.string(from: date)
+    }
+
+    @ViewBuilder private var trainingModule: some View {
+        HStack {
+            SectionHeader(text: "Training & body", color: store.moduleColor("training"))
+            Spacer()
+            Button { showWorkout = true } label: {
+                Label("Log workout", systemImage: "plus")
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
+            }
+            .padding(.trailing, 8).padding(.top, 22)
+        }
+        workoutsList
+        trainingCard
+    }
+
+    @ViewBuilder private var workoutsList: some View {
+        let workouts = store.draft.workouts
+        if !workouts.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(Array(workouts.enumerated()), id: \.element.id) { idx, w in
+                    Button { editWorkout = w } label: {
+                        HStack(spacing: 11) {
+                            IconTile(symbol: Workout.symbol(w.kind),
+                                     colors: [Theme.accent, Color(hex: 0xC8632E)], size: 30, corner: 9)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(w.title.isEmpty ? Workout.label(w.kind) : w.title)
+                                    .font(.system(size: 15.5, weight: .medium)).foregroundStyle(Theme.ink)
+                                Text(workoutSummary(w)).font(.system(size: 12.5)).foregroundStyle(Theme.tertiaryInk)
+                            }
+                            Spacer()
+                            if w.healthWritten {
+                                Image(systemName: "heart.fill").font(.system(size: 11)).foregroundStyle(Color(hex: 0xFB1E4B).opacity(0.7))
+                            }
+                            Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 11)
+                    }
+                    .buttonStyle(.plain)
+                    if idx < workouts.count - 1 { Hairline() }
+                }
+            }
+            .glassList()
+            .padding(.bottom, 4)
+        }
+    }
+
+    private func workoutSummary(_ w: Workout) -> String {
+        var bits: [String] = []
+        if !w.exercises.isEmpty { bits.append("\(w.exercises.count) exercise\(w.exercises.count == 1 ? "" : "s")") }
+        if w.volume > 0 { bits.append("\(Int(w.volume)) kg vol") }
+        if w.durationMin > 0 { bits.append("\(w.durationMin) min") }
+        return bits.isEmpty ? Workout.label(w.kind) : bits.joined(separator: " · ")
+    }
+
+    @ViewBuilder private var photosModule: some View {
+        SectionHeader(text: "Photos", color: store.moduleColor("photos"))
+        photosSection
+    }
+
+    // MARK: - Date header (navigate to any past day)
+
+    private var dateHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(store.todaySubtitle)
+                        .font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.secondaryInk)
+                    Text(store.dayLabel)
+                        .font(.system(size: 34, weight: .bold)).tracking(0.3).foregroundStyle(Theme.ink)
+                }
+                Spacer()
+                HStack(spacing: 4) {
+                    navButton("chevron.left", enabled: true) { store.shiftDay(by: -1) }
+                    navButton("calendar", enabled: true) { showHistory = true }
+                    navButton("chevron.right", enabled: store.canGoForward) { store.shiftDay(by: 1) }
+                }
+            }
+            statusChip
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder private var statusChip: some View {
+        let effective = store.effectiveStatus(for: store.date)
+        let shown = store.draft.status != "normal" ? store.draft.status : effective
+        Menu {
+            ForEach(DayStatus.all, id: \.id) { s in
+                Button { store.setDayStatus(s.id) } label: { Label(s.label, systemImage: s.symbol) }
+            }
+        } label: {
+            if shown != "normal" {
+                HStack(spacing: 4) {
+                    Image(systemName: DayStatus.symbol(shown)).font(.system(size: 10))
+                    Text(DayStatus.label(shown) + (store.draft.status == "normal" && effective == "travel" ? " (auto)" : ""))
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 9).padding(.vertical, 4)
+                .background(Capsule().fill(Color(hex: 0x5B43E0)))
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: "flag").font(.system(size: 10))
+                    Text("Mark day").font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(Theme.accentDark)
+                .padding(.horizontal, 9).padding(.vertical, 4)
+                .background(Capsule().fill(Theme.accent.opacity(0.12)))
+            }
+        }
+    }
+
+    private func navButton(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(enabled ? Theme.accentDark : Color(white: 0.27).opacity(0.25))
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(Color.white.opacity(0.5))
+                    .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 0.5)))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    // MARK: - Prayer times card
+
+    @ViewBuilder private var prayerCard: some View {
+        if prayer.enabled, let times = prayer.today {
+            let next = prayer.nextPrayer
+            VStack(spacing: 0) {
+                HStack {
+                    HStack(spacing: 7) {
+                        Image(systemName: "moon.stars.fill").font(.system(size: 13)).foregroundStyle(Theme.accentDark)
+                        Text(prayer.placeName.isEmpty ? "Prayer times" : "Prayers · \(prayer.placeName)")
+                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink)
+                    }
+                    Spacer()
+                    if let next {
+                        Text("Next: \(next.0.label) \(timeStr(next.1))")
+                            .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accentDark)
+                    }
+                    Button { showQibla = true } label: {
+                        Image(systemName: "location.north.line.fill")
+                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                            .padding(.leading, 8)
+                    }.buttonStyle(.plain)
+                }
+                .padding(.bottom, 10)
+                HStack(spacing: 6) {
+                    ForEach(times.ordered.filter { $0.0.isPrayer }, id: \.0) { name, date in
+                        let isNext = next?.0 == name
+                        let prayed = store.isPrayed(name)
+                        Button { store.togglePrayer(name) } label: {
+                            VStack(spacing: 4) {
+                                Text(name.label).font(.system(size: 11)).foregroundStyle(Theme.secondaryInk)
+                                Text(timeStr(date)).font(.system(size: 12.5, weight: .semibold))
+                                    .foregroundStyle(prayed ? .white : (isNext ? Theme.accentDark : Theme.ink))
+                                Image(systemName: prayed ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(prayed ? .white : Color(white: 0.27).opacity(0.3))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(prayed ? AnyShapeStyle(Theme.sage)
+                                                 : AnyShapeStyle(isNext ? Theme.accent.opacity(0.16) : Color.clear))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Text("Tap a prayer once you\u{2019}ve prayed it.")
+                    .font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+            }
+            .padding(14)
+            .glassList(cornerRadius: 20)
+            .padding(.top, 12)
+        }
+    }
+
+    private func timeStr(_ d: Date) -> String {
+        let f = DateFormatter(); f.dateFormat = "h:mm a"; return f.string(from: d)
+    }
+
+    // MARK: - AI coach suggestion
+
+    @ViewBuilder private var coachCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 11) {
+                IconTile(symbol: "sparkles", colors: [Theme.accent, Color(hex: 0xC8632E)], size: 32, corner: 10)
+                if store.suggestionLoading && store.suggestion.isEmpty {
+                    Text("Thinking about your day…")
+                        .font(.system(size: 14)).foregroundStyle(Theme.secondaryInk)
+                } else if store.suggestion.isEmpty {
+                    Text("Your AI coach can see your logs — ask it anything.")
+                        .font(.system(size: 14.5)).foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(store.suggestion)
+                        .font(.system(size: 14.5)).foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Button { Task { await store.refreshSuggestion(force: true) } } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.tertiaryInk)
+                }
+                .buttonStyle(.plain)
+            }
+            Button { showChat = true } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "bubble.left.and.bubble.right.fill").font(.system(size: 12))
+                    Text(store.chatMessages.isEmpty ? "Ask the coach" : "Continue chat")
+                        .font(.system(size: 13.5, weight: .semibold))
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).opacity(0.5)
+                }
+                .foregroundStyle(Theme.accentDark)
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .background(RoundedRectangle(cornerRadius: 13).fill(Color.white.opacity(0.5)))
+                .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.accent.opacity(0.3), lineWidth: 0.5))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(LinearGradient(colors: [Theme.accent.opacity(0.16), Theme.accent.opacity(0.05)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Theme.accent.opacity(0.35), lineWidth: 0.5))
+        )
+        .padding(.top, 14)
+    }
+
+    // MARK: - Quick log (catalog items)
+
+    @ViewBuilder private var quickLog: some View {
+        HStack {
+            SectionHeader(text: "Quick log", color: store.moduleColor("quickLog"))
+            Spacer()
+            Button { showCatalog = true } label: {
+                Text("Library").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
+            }
+            .padding(.trailing, 8).padding(.top, 22)
+        }
+
+        let supps = store.items(of: .supplement)
+        let foods = store.items(of: .food)
+        if supps.isEmpty && foods.isEmpty {
+            Button { showCatalog = true } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accentDark)
+                    Text("Add your regular supplements & foods — then tap to log them daily.")
+                        .font(.system(size: 13.5)).foregroundStyle(Theme.secondaryInk)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .glassList()
+            }
+            .buttonStyle(.plain)
+        } else {
+            VStack(spacing: 10) {
+                if !supps.isEmpty { chipGroup(title: "Supplements", items: supps) }
+                if !foods.isEmpty { chipGroup(title: "Foods", items: foods) }
+            }
+        }
+        microsSummary
+    }
+
+    @ViewBuilder private var microsSummary: some View {
+        if !store.draft.logged.isEmpty || store.draft.ai != nil {
+            let n = store.dayNutrients()
+            VStack(alignment: .leading, spacing: 8) {
+                Text("CARBS · FAT · FIBER · MICROS (TODAY)").font(.system(size: 11, weight: .semibold)).tracking(0.3)
+                    .foregroundStyle(Theme.tertiaryInk)
+                HStack(spacing: 8) {
+                    nutPill("Carbs", n.carbs, "g")
+                    nutPill("Fat", n.fat, "g")
+                    nutPill("Fiber", n.fiber, "g")
+                }
+                if !n.micros.isEmpty {
+                    FlowLayout(spacing: 6) {
+                        ForEach(n.micros) { m in
+                            Text("\(m.name) \(fmtMicro(m.amount))\(m.unit)")
+                                .font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color(hex: 0x5B43E0))
+                                .padding(.horizontal, 9).padding(.vertical, 5)
+                                .background(Capsule().fill(Color(hex: 0x6FA8FF).opacity(0.16)))
+                        }
+                    }
+                }
+            }
+            .padding(14).frame(maxWidth: .infinity, alignment: .leading).glassList().padding(.top, 10)
+        }
+    }
+
+    private func nutPill(_ label: String, _ value: Double, _ unit: String) -> some View {
+        VStack(spacing: 1) {
+            Text("\(fmtMicro(value))\(unit)").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
+            Text(label).font(.system(size: 10)).foregroundStyle(Theme.tertiaryInk)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5)))
+    }
+
+    private func fmtMicro(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(format: "%.1f", d) }
+
+    private func chipGroup(title: String, items: [CatalogItem]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(0.3)
+                .foregroundStyle(Theme.tertiaryInk).padding(.horizontal, 4)
+            FlowLayout(spacing: 8) {
+                ForEach(items) { item in
+                    chip(item)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder private func chip(_ item: CatalogItem) -> some View {
+        let qty = store.loggedQty(item.id)
+        if qty > 0 {
+            HStack(spacing: 8) {
+                Button { store.removeServing(item) } label: {
+                    Image(systemName: qty == 1 ? "trash" : "minus").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                }.buttonStyle(.plain)
+                Text(qty > 1 ? "\(item.name) ×\(qty)" : item.name)
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                Button { store.addServing(item) } label: {
+                    Image(systemName: "plus").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                }.buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .background(Capsule().fill(Theme.sage))
+        } else {
+            Button { store.addServing(item) } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                    Text(item.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .background(
+                    Capsule().fill(Color.white.opacity(0.55))
+                        .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.4), lineWidth: 0.5))
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Apple Health card
+
+    private var healthCard: some View {
+        let on = store.settings.healthkit
+        return GlassCard(padding: 16, cornerRadius: 24, tint: .white.opacity(0.46)) {
+            VStack(spacing: 13) {
+                HStack(spacing: 10) {
+                    IconTile(symbol: "heart.fill",
+                             colors: [Color(hex: 0xFF5E7A), Color(hex: 0xFB1E4B)])
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Apple Health")
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
+                        Text(on ? "Connected" : "Not connected")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(Color(hex: 0x4FB286))
+                    }
+                    Spacer()
+                    Text(on ? "Synced now" : "")
+                        .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                }
+                HStack(spacing: 10) {
+                    miniStat(title: store.isToday ? "Steps today" : "Steps",
+                             value: on ? stepsString : "—")
+                    miniStat(title: "Weight",
+                             value: weightString)
+                }
+            }
+        }
+        .padding(.top, 14)
+    }
+
+    private var stepsString: String {
+        let n = Int(health.dateSteps)
+        return NumberFormatter.localizedString(from: NSNumber(value: n), number: .decimal)
+    }
+
+    /// Prefer the weight logged for the day; otherwise the latest Health sample up to that day.
+    private var weightString: String {
+        if let w = Double(store.draft.weight), w > 0 { return String(format: "%.1f kg", w) }
+        if store.settings.healthkit, health.dateWeight > 0 { return String(format: "%.1f kg", health.dateWeight) }
+        return "—"
+    }
+
+    private func miniStat(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.system(size: 11.5)).foregroundStyle(Theme.secondaryInk)
+            Text(value).font(.system(size: 22, weight: .semibold)).monospacedDigit()
+                .foregroundStyle(Theme.ink)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 13).padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .fill(Color.white.opacity(0.5))
+                .overlay(RoundedRectangle(cornerRadius: 15).strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
+        )
+    }
+
+    // MARK: - Tip
+
+    private var tipCard: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Text("◦").foregroundStyle(Theme.accentDark).font(.system(size: 14))
+            Text(store.tipText)
+                .font(.system(size: 13.5)).foregroundStyle(Theme.tipText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 13).padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.tipBG)
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.tipBorder, lineWidth: 0.5))
+        )
+        .padding(.top, 12)
+    }
+
+    // MARK: - Meals
+
+    private var mealsCard: some View {
+        VStack(spacing: 0) {
+            ForEach(Content.mealDefs, id: \.key) { def in
+                let highlight = store.isToday && store.mealNudge?.key == def.key
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(def.label).font(.system(size: 12, weight: highlight ? .semibold : .regular))
+                            .foregroundStyle(highlight ? Theme.accentDark : Theme.secondaryInk)
+                        if highlight {
+                            Text("now").font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .background(Capsule().fill(Theme.accentDark))
+                        }
+                        Spacer()
+                        mealTimeChip(def.key)
+                    }
+                    TextField(def.placeholder, text: mealBinding(def.key), axis: .vertical)
+                        .font(.system(size: 16)).foregroundStyle(Theme.ink)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 11)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(highlight ? Theme.accent.opacity(0.10) : .clear)
+                Hairline()
+            }
+            Button {
+                Task { await store.estimate() }
+            } label: {
+                Text(estimateLabel)
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(LinearGradient(colors: [Color(hex: 0xECB477), Color(hex: 0xE29A4E)],
+                                                 startPoint: .top, endPoint: .bottom))
+                    )
+                    .opacity(store.aiStatus == .loading ? 0.7 : 1)
+            }
+            .buttonStyle(.plain)
+            .disabled(store.aiStatus == .loading)
+            .padding(.horizontal, 16).padding(.vertical, 13)
+        }
+        .glassList()
+    }
+
+    private var estimateLabel: String {
+        switch store.aiStatus {
+        case .loading: return "Estimating your day…"
+        default: return store.draft.ai != nil ? "Re-estimate my day" : "Estimate my day"
+        }
+    }
+
+    // MARK: - AI result / error
+
+    @ViewBuilder private var aiResult: some View {
+        if let ai = store.draft.ai {
+            VStack(spacing: 0) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(store.aiModelLine)
+                        .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color(hex: 0xB7752E))
+                    Spacer()
+                    Text("±10–15%").font(.system(size: 11.5)).foregroundStyle(Theme.tertiaryInk)
+                }
+                .padding(.bottom, 11)
+                ForEach(ai.meals) { r in
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(r.label).font(.system(size: 14)).foregroundStyle(Theme.ink)
+                            if let note = r.note, !note.isEmpty {
+                                Text(note).font(.system(size: 11.5)).foregroundStyle(Theme.tertiaryInk)
+                            }
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text("\(Int((r.calories ?? 0).rounded())) kcal")
+                                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                            Text("P\(Int((r.protein ?? 0).rounded())) · C\(Int((r.carbs ?? 0).rounded())) · F\(Int((r.fat ?? 0).rounded()))")
+                                .font(.system(size: 11.5)).foregroundStyle(Theme.tertiaryInk)
+                        }
+                    }
+                    .padding(.vertical, 7)
+                    Hairline()
+                }
+                HStack {
+                    Text("Whole day").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                    Spacer()
+                    Text("\(Int((ai.total.calories ?? 0).rounded())) kcal · \(Int((ai.total.protein ?? 0).rounded()))g protein")
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0xB7752E))
+                }
+                .padding(.top, 10)
+                Text("Auto-filled your totals. Estimates are approximate.")
+                    .font(.system(size: 11.5)).foregroundStyle(Theme.tertiaryInk)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(LinearGradient(colors: [Theme.accent.opacity(0.18), Theme.accent.opacity(0.06)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Theme.accent.opacity(0.4), lineWidth: 0.5))
+            )
+            .padding(.top, 12)
+        } else if store.aiStatus == .error {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Couldn\u{2019}t reach the estimator just now — no problem. Add calories & protein by hand below.")
+                if !store.aiErrorMessage.isEmpty {
+                    Text(store.aiErrorMessage)
+                        .font(.system(size: 12)).foregroundStyle(Color(hex: 0xD86B4A))
+                }
+            }
+                .font(.system(size: 13.5)).foregroundStyle(Color(white: 0.29))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.5))
+                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(white: 0.27).opacity(0.12), lineWidth: 0.5))
+                )
+                .padding(.top, 12)
+        }
+    }
+
+    // MARK: - Totals
+
+    private var totals: some View {
+        HStack(spacing: 10) {
+            totalField(title: "Calories", target: "/ \(Int(store.targets.calories))", binding: caloriesBinding)
+            totalField(title: "Protein g", target: "/ \(Int(store.targets.protein))", binding: proteinBinding)
+        }
+        .padding(.top, 14)
+    }
+
+    private func totalField(title: String, target: String, binding: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 3) {
+                Text(title).font(.system(size: 12)).foregroundStyle(Theme.secondaryInk)
+                Text(target).font(.system(size: 12)).foregroundStyle(Color(white: 0.27).opacity(0.35))
+            }
+            TextField("—", text: binding)
+                .keyboardType(.numberPad)
+                .font(.system(size: 24, weight: .semibold)).foregroundStyle(Theme.ink)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.5)))
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+        )
+    }
+
+    // MARK: - Habits (configurable, grouped by pillar)
+
+    @ViewBuilder private var habitsSection: some View {
+        HStack {
+            SectionHeader(text: "Your non-negotiables", color: store.moduleColor("habits"))
+            Spacer()
+            Button { showHabits = true } label: {
+                Text("Edit").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
+            }.padding(.trailing, 8).padding(.top, 22)
+        }
+        ForEach(store.usedPillars) { pillar in
+            let items = store.habits(in: pillar)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: pillar.icon).font(.system(size: 11)).foregroundStyle(Color(hex: pillar.hex))
+                    Text(store.pillarTitle(pillar).uppercased()).font(.system(size: 11, weight: .semibold)).tracking(0.3)
+                        .foregroundStyle(Theme.tertiaryInk)
+                }
+                .padding(.horizontal, 4)
+                VStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { idx, def in
+                        habitRow(def)
+                        if idx < items.count - 1 { Hairline() }
+                    }
+                }
+                .glassList()
+            }
+            .padding(.bottom, 10)
+        }
+    }
+
+    private func habitRow(_ def: HabitDef) -> some View {
+        let on = store.isSatisfied(def, store.draft)
+        return HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(def.title).font(.system(size: 16)).foregroundStyle(Theme.ink)
+                if def.link.isAuto {
+                    Text("Auto · \(def.link.label)").font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk)
+                }
+            }
+            Spacer()
+            if def.link == .manual {
+                ToggleRow(on: on) { store.toggleHabit(def) }
+            } else {
+                Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22)).foregroundStyle(on ? Theme.sage : Color(white: 0.47).opacity(0.3))
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 13)
+    }
+
+    // MARK: - Score
+
+    private var scoreCard: some View {
+        let s = store.draftScore
+        let total = store.habitTotal
+        let msg = store.scoreMessage(s)
+        let won = store.dayWon(store.draft)
+        return HStack(spacing: 14) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("\(s)").font(Theme.serif(40)).foregroundStyle(msg.color)
+                Text("/\(total)").font(.system(size: 19)).foregroundStyle(Color(white: 0.27).opacity(0.4))
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(msg.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
+                Text(msg.sub).font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
+            }
+            Spacer()
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(won ? Theme.sage.opacity(0.1) : Color.white.opacity(0.5))
+                .overlay(RoundedRectangle(cornerRadius: 22)
+                    .strokeBorder(won ? Theme.sage.opacity(0.3) : .white.opacity(0.7), lineWidth: 0.5))
+        )
+        .padding(.top, 14)
+    }
+
+    // MARK: - Study & work
+
+    private var showStudySection: Bool {
+        store.usedPillars.contains(.work) || !store.data.countdowns.isEmpty
+            || !store.data.subjects.isEmpty || store.draft.studyHours > 0
+    }
+
+    @ViewBuilder private var studySection: some View {
+        if showStudySection {
+            let vocab = store.workVocab
+            HStack {
+                SectionHeader(text: vocab.pillar, color: store.moduleColor("workStudy"))
+                Spacer()
+                Button { showStudy = true } label: {
+                    Text("Manage").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                }.padding(.trailing, 8).padding(.top, 22)
+            }
+
+            ForEach(store.data.countdowns) { cd in
+                let days = store.days(until: cd.date)
+                HStack(spacing: 12) {
+                    IconTile(symbol: cd.kind == "work" ? "flag.checkered" : "graduationcap.fill",
+                             colors: [Color(hex: 0x6FA8FF), Color(hex: 0x5B43E0)], size: 40, corner: 12)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(cd.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
+                        Text(examLine(days)).font(.system(size: 12.5)).foregroundStyle(Theme.secondaryInk)
+                    }
+                    Spacer()
+                    Text("\(max(0, days))").font(Theme.serif(34)).foregroundStyle(Color(hex: 0x5B43E0))
+                }
+                .padding(16).glassList().padding(.bottom, 8)
+            }
+
+            studyTimerCard
+
+            // hours today
+            HStack(spacing: 12) {
+                Image(systemName: "clock.fill").foregroundStyle(Color(hex: 0x5B43E0))
+                Text(String(format: "%.1f / %.0f h · \(vocab.hours.lowercased())", store.draft.studyHours, store.targets.studyHours))
+                    .font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink)
+                Spacer()
+                Button("+30m") { store.addStudyHours(0.5) }
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0x5B43E0))
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Capsule().fill(Color(hex: 0x6FA8FF).opacity(0.18)))
+            }
+            .padding(16).glassList().padding(.top, 10)
+
+            if !store.data.subjects.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(store.data.subjects.enumerated()), id: \.element.id) { idx, s in
+                        Button { store.toggleSubject(s.id) } label: {
+                            HStack {
+                                Image(systemName: s.done ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(s.done ? Theme.sage : Color(white: 0.47).opacity(0.3))
+                                Text(s.name).font(.system(size: 15))
+                                    .foregroundStyle(s.done ? Theme.tertiaryInk : Theme.ink)
+                                    .strikethrough(s.done)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 12)
+                        }.buttonStyle(.plain)
+                        if idx < store.data.subjects.count - 1 { Hairline() }
+                    }
+                }
+                .glassList().padding(.top, 10)
+            }
+        }
+    }
+
+    private func examLine(_ days: Int) -> String {
+        if days < 0 { return "Exam day has passed" }
+        if days == 0 { return "Today — you've got this 💪" }
+        return "\(days) day\(days == 1 ? "" : "s") to go"
+    }
+
+    @ViewBuilder private var studyTimerCard: some View {
+        if studyTimer.running {
+            VStack(spacing: 10) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(studyTimer.subject.isEmpty ? "Studying" : studyTimer.subject)
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
+                        Text(studyTimer.paused ? "Paused" : "In progress")
+                            .font(.system(size: 12)).foregroundStyle(studyTimer.paused ? Theme.tertiaryInk : Theme.sage)
+                    }
+                    Spacer()
+                    Text(timeFmt(studyTimer.elapsed)).font(Theme.serif(30)).monospacedDigit().foregroundStyle(Theme.ink)
+                }
+                HStack(spacing: 10) {
+                    Button(studyTimer.paused ? "Resume" : "Pause") {
+                        studyTimer.paused ? studyTimer.resume() : studyTimer.pause()
+                    }
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0x5B43E0))
+                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0x6FA8FF).opacity(0.18)))
+                    Button("Stop & log") {
+                        let mins = studyTimer.stop()
+                        store.logStudySession(subject: studyTimer.subject, minutes: mins)
+                    }
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0x5B43E0)))
+                }
+            }
+            .padding(16).glassList().padding(.top, 10)
+        } else {
+            Button { showStudy = true } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "play.circle.fill").foregroundStyle(Color(hex: 0x5B43E0))
+                    Text("Start a \(store.workVocab.session.lowercased())").font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink)
+                    Spacer()
+                }
+                .padding(.horizontal, 16).padding(.vertical, 14).frame(maxWidth: .infinity).glassList()
+            }.buttonStyle(.plain).padding(.top, 10)
+        }
+    }
+
+    private func timeFmt(_ t: TimeInterval) -> String {
+        let s = Int(t); return String(format: "%02d:%02d:%02d", s/3600, (s%3600)/60, s%60)
+    }
+
+    // MARK: - Training & body
+
+    private var trainingCard: some View {
+        VStack(spacing: 0) {
+            labeledField(label: "Session", hint: "— note any neck / shoulder discomfort",
+                         placeholder: "e.g. Lower body + core. Neck fine.", binding: trainingBinding)
+            Hairline()
+            labeledField(label: "Longest jog (min) or intervals", hint: nil,
+                         placeholder: "e.g. 2 min × 5", binding: runBinding)
+            Hairline()
+            HStack {
+                Text("Weight (kg)").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                Spacer()
+                TextField("—", text: weightBinding)
+                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                    .font(.system(size: 16)).foregroundStyle(Theme.ink).frame(width: 90)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 13)
+            Hairline()
+            HStack {
+                Text("Sleep / mood / stress").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                Spacer()
+                TextField("one line", text: smsBinding)
+                    .multilineTextAlignment(.trailing)
+                    .font(.system(size: 15)).foregroundStyle(Theme.ink).frame(width: 160)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 13)
+        }
+        .glassList()
+    }
+
+    private func labeledField(label: String, hint: String?, placeholder: String, binding: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Text(label).font(.system(size: 12)).foregroundStyle(Theme.secondaryInk)
+                if let hint {
+                    Text(hint).font(.system(size: 12)).foregroundStyle(Color(white: 0.27).opacity(0.35))
+                }
+            }
+            TextField(placeholder, text: binding, axis: .vertical)
+                .font(.system(size: 16)).foregroundStyle(Theme.ink)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Bindings into the autosaving draft
+
+    @ViewBuilder private func mealTimeChip(_ key: String) -> some View {
+        let hasContent = !mealBinding(key).wrappedValue.trimmingCharacters(in: .whitespaces).isEmpty
+        if hasContent {
+            let epoch = store.draft.mealTimes[key]
+            Button { editingTimeKey = MealKey(id: key) } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "clock").font(.system(size: 10))
+                    Text(epoch.map { mealTimeStr($0) } ?? "set time").font(.system(size: 11, weight: .medium))
+                }
+                .foregroundStyle(Theme.accentDark)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(Capsule().fill(Theme.accent.opacity(0.12)))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func mealTimeStr(_ epoch: Double) -> String {
+        let f = DateFormatter(); f.dateFormat = "h:mm a"
+        return f.string(from: Date(timeIntervalSince1970: epoch))
+    }
+
+    @ViewBuilder private func mealTimeSheet(_ key: String) -> some View {
+        let label = Content.mealDefs.first { $0.key == key }?.label ?? "Meal"
+        let initial = store.draft.mealTimes[key].map { Date(timeIntervalSince1970: $0) } ?? Date()
+        MealTimeSheet(label: label, initial: initial,
+                      onSet: { store.setMealTime(key, $0); editingTimeKey = nil },
+                      onClear: { store.setMealTime(key, nil); editingTimeKey = nil })
+    }
+
+    private func mealBinding(_ key: String) -> Binding<String> {
+        Binding(
+            get: {
+                switch key {
+                case "breakfast": return store.draft.meals.breakfast
+                case "snacks": return store.draft.meals.snacks
+                case "lunch": return store.draft.meals.lunch
+                case "dinner": return store.draft.meals.dinner
+                case "drinks": return store.draft.meals.drinks
+                default: return ""
+                }
+            },
+            set: { v in store.mutate { e in
+                let wasEmpty: Bool
+                switch key {
+                case "breakfast": wasEmpty = e.meals.breakfast.isEmpty; e.meals.breakfast = v
+                case "snacks": wasEmpty = e.meals.snacks.isEmpty; e.meals.snacks = v
+                case "lunch": wasEmpty = e.meals.lunch.isEmpty; e.meals.lunch = v
+                case "dinner": wasEmpty = e.meals.dinner.isEmpty; e.meals.dinner = v
+                case "drinks": wasEmpty = e.meals.drinks.isEmpty; e.meals.drinks = v
+                default: wasEmpty = false
+                }
+                // Auto-stamp the eaten time the first time a meal gets content today.
+                if wasEmpty && !v.isEmpty && store.isToday && e.mealTimes[key] == nil {
+                    e.mealTimes[key] = Date().timeIntervalSince1970
+                }
+            }}
+        )
+    }
+
+    private var caloriesBinding: Binding<String> { field(\.calories) }
+    private var proteinBinding: Binding<String> { field(\.proteinG) }
+    private var trainingBinding: Binding<String> { field(\.training) }
+    private var runBinding: Binding<String> { field(\.run) }
+    private var weightBinding: Binding<String> { field(\.weight) }
+    private var smsBinding: Binding<String> { field(\.sms) }
+
+    private func field(_ kp: WritableKeyPath<Entry, String>) -> Binding<String> {
+        Binding(
+            get: { store.draft[keyPath: kp] },
+            set: { v in store.mutate { $0[keyPath: kp] = v } }
+        )
+    }
+}
