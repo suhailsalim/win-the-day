@@ -62,7 +62,7 @@ struct QiblaView: View {
                     ZStack {
                         Circle().fill(.ultraThinMaterial)
                             .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
-                            .shadow(color: Color(hex: 0x966E46).opacity(0.12), radius: 14, y: 6)
+                            .shadow(color: Color(hex: 0x2A3350).opacity(0.12), radius: 14, y: 6)
                         // cardinal ticks rotate opposite to heading
                         compassDial.rotationEffect(.degrees(-qibla.heading))
                         // qibla arrow

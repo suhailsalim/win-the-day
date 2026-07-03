@@ -56,7 +56,7 @@ struct OnboardingView: View {
                 .font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
                 .frame(maxWidth: .infinity).padding(.vertical, 15)
                 .background(RoundedRectangle(cornerRadius: 16)
-                    .fill(LinearGradient(colors: [Color(hex: 0xECB477), Color(hex: 0xE29A4E)], startPoint: .top, endPoint: .bottom)))
+                    .fill(LinearGradient(colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)], startPoint: .top, endPoint: .bottom)))
                 .padding(.horizontal, 22).padding(.bottom, 6)
 
                 if index > 0 {

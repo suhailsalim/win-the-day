@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var showExporter = false
     @State private var showImporter = false
     @State private var showModulesEditor = false
+    @State private var showRingEditor = false
     @State private var exportURL: URL?
     @State private var pdfURL: URL?
     @State private var showPDFShare = false
@@ -57,6 +58,20 @@ struct SettingsView: View {
             healthSyncCard
             SectionHeader(text: "Daily targets")
             targetsCard
+
+            SectionHeader(text: "Eating score profile")
+            eatingProfileCard
+
+            SectionHeader(text: "Rings")
+            Button { showRingEditor = true } label: {
+                HStack {
+                    Image(systemName: "circle.grid.2x2").foregroundStyle(Theme.accentDark)
+                    Text("Manage rings").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                }
+                .padding(.horizontal, 16).padding(.vertical, 13).glassList()
+            }
 
             SectionHeader(text: "The prize")
             prizeCard
@@ -110,6 +125,7 @@ struct SettingsView: View {
         }
         .onAppear { apiKey = Keychain.get(store.settings.provider) }
         .sheet(isPresented: $showModulesEditor) { ModulesEditorView() }
+        .sheet(isPresented: $showRingEditor) { RingEditorView() }
         .fileExporter(isPresented: $showExporter,
                       document: exportURL.map { JSONDocument(url: $0) },
                       contentType: .json,
@@ -199,7 +215,7 @@ struct SettingsView: View {
         case "deepseek": return [Color(hex: 0x5B8DEF), Color(hex: 0x2E5BC8)]
         case "ollama": return [Color(hex: 0x9AA0A6), Color(hex: 0x3C4043)]
         case "ollamacloud": return [Color(hex: 0x7D8590), Color(hex: 0x1F2328)]
-        default: return [Color(hex: 0xE6A765), Color(hex: 0xC8632E)]
+        default: return [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)]
         }
     }
 
@@ -269,7 +285,7 @@ struct SettingsView: View {
             } else if case .failed(let msg) = testState {
                 Hairline()
                 Text(msg)
-                    .font(.system(size: 12)).foregroundStyle(Color(hex: 0xC8632E))
+                    .font(.system(size: 12)).foregroundStyle(Color(hex: 0x3B4A7C))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16).padding(.vertical, 10)
@@ -429,7 +445,7 @@ struct SettingsView: View {
         .glassList()
     }
 
-    private let colorableModules = ["coach", "weather", "prayer", "fasting", "sleep", "health", "meals", "hydration",
+    private let colorableModules = ["rings", "coach", "weather", "prayer", "fasting", "sleep", "health", "meals", "hydration",
                                     "quickLog", "habits", "score", "workStudy", "training", "photos"]
 
     private var moduleColorsCard: some View {
@@ -578,7 +594,7 @@ struct SettingsView: View {
     private var prayerCard: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                IconTile(symbol: "moon.stars.fill", colors: [Color(hex: 0xE6A765), Color(hex: 0xC8632E)])
+                IconTile(symbol: "moon.stars.fill", colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)])
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Islamic prayers").font(.system(size: 16)).foregroundStyle(Theme.ink)
                     Text(prayer.placeName.isEmpty ? "Times, Qibla & reminders"
@@ -678,6 +694,40 @@ struct SettingsView: View {
             stepperRow("Steps", value: "\(Int(store.targets.steps))",
                        dec: { store.updateTargets { $0.steps = max(1000, $0.steps - 500) } },
                        inc: { store.updateTargets { $0.steps += 500 } })
+        }
+        .glassList()
+    }
+
+    // MARK: - Eating-score profile (BMR/TDEE inputs — drives the Eating ring & weekly projection)
+
+    private var eatingProfileCard: some View {
+        VStack(spacing: 0) {
+            stepperRow("Age", value: "\(Int(store.targets.ageYears))",
+                       dec: { store.updateTargets { $0.ageYears = max(13, $0.ageYears - 1) } },
+                       inc: { store.updateTargets { $0.ageYears += 1 } })
+            Hairline()
+            stepperRow("Height", value: "\(Int(store.targets.heightCm)) cm",
+                       dec: { store.updateTargets { $0.heightCm = max(120, $0.heightCm - 1) } },
+                       inc: { store.updateTargets { $0.heightCm += 1 } })
+            Hairline()
+            HStack {
+                Text("Sex (for BMR)").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                Spacer()
+                Picker("", selection: Binding(get: { store.targets.sexMale }, set: { v in store.updateTargets { $0.sexMale = v } })) {
+                    Text("Male").tag(true)
+                    Text("Female").tag(false)
+                }.labelsHidden().tint(Theme.accentDark)
+            }.padding(.horizontal, 16).padding(.vertical, 6)
+            Hairline()
+            HStack {
+                Text("Goal").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                Spacer()
+                Picker("", selection: Binding(get: { store.targets.goal }, set: { v in store.updateTargets { $0.goal = v } })) {
+                    Text("Cut").tag("cut")
+                    Text("Maintain").tag("maintain")
+                    Text("Bulk").tag("bulk")
+                }.labelsHidden().tint(Theme.accentDark)
+            }.padding(.horizontal, 16).padding(.vertical, 6)
         }
         .glassList()
     }

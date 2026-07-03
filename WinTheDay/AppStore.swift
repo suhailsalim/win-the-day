@@ -33,10 +33,11 @@ final class AppStore: ObservableObject {
     func moduleColor(_ key: String) -> Color {
         if let hex = personal.moduleColors[key] { return Color(hex: hex) }
         switch key {
+        case "rings": return Theme.accentDark
         case "health": return Color(hex: 0xFB1E4B)
         case "hydration": return Color(hex: 0x2E8AE0)
         case "workStudy": return Color(hex: 0x5B43E0)
-        case "fasting": return Color(hex: 0xC8843E)
+        case "fasting": return Color(hex: 0x3B4A7C)
         case "sleep": return Color(hex: 0x6E7BFF)
         case "weather": return Color(hex: 0x2E8AE0)
         case "score": return Theme.sage
@@ -63,10 +64,18 @@ final class AppStore: ObservableObject {
     @Published var suggestionLoading = false
     private var suggestionSlot: String = ""   // date+timeslot we last fetched for
 
-    // Coach chat
-    @Published var chatMessages: [ChatMessage] = []
+    // Weather module's AI tips rotator — batched (one call per date+timeslot), never empty.
+    @Published var dayTips: [String] = []
+    @Published var dayTipsLoading = false
+    private var dayTipsSlot: String = ""
+
+    // Coach chat — multiple threads, each its own conversation
+    @Published var threads: [CoachThread] = []
+    @Published var activeThreadID: String = ""
     @Published var chatLoading = false
-    private let chatKey = "coach_chat_v1"
+    private let threadsKey = "coach_threads_v1"
+    private let activeThreadKey = "coach_active_thread_v1"
+    private let legacyChatKey = "coach_chat_v1"   // pre-multi-thread single transcript, migrated once
 
     private let estimator = AIEstimator()
 
@@ -76,9 +85,10 @@ final class AppStore: ObservableObject {
         self.draft = Entry(date: today)
         load()
         if data.habits.isEmpty { data.habits = HabitDef.defaults; persistData() }
+        if data.rings.isEmpty { data.rings = RingDef.defaults; persistData() }
         migrateExamIfNeeded()
         self.draft = loadDraft(for: today)
-        loadChat()
+        loadThreads()
     }
 
     // MARK: - Module reordering
@@ -318,6 +328,22 @@ final class AppStore: ObservableObject {
         }
     }
 
+    // MARK: - Focus mode (ADHD-friendly single-task queue; sessions still run through StudyTimer)
+
+    private let focusQueueKey = "focus_queue_v1"
+    @Published var focusQueue: [String] = UserDefaults.standard.stringArray(forKey: "focus_queue_v1") ?? []
+
+    func addFocusTask(_ text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, !focusQueue.contains(t) else { return }
+        focusQueue.append(t)
+        UserDefaults.standard.set(focusQueue, forKey: focusQueueKey)
+    }
+    func removeFocusTask(_ text: String) {
+        focusQueue.removeAll { $0 == text }
+        UserDefaults.standard.set(focusQueue, forKey: focusQueueKey)
+    }
+
     // MARK: - Date helpers
 
     static func dateString(_ d: Date) -> String {
@@ -520,6 +546,8 @@ final class AppStore: ObservableObject {
     }
 
     private func commit() {
+        let eating = eatingScoreResult(for: draft)
+        draft.eatingScore = eating.available ? eating.score : nil
         if draft.isMeaningful {
             data.entries[draft.date] = draft
         } else {
@@ -555,7 +583,21 @@ final class AppStore: ObservableObject {
         } else { s.nextOccasionTitle = ""; s.nextOccasionEpoch = 0 }
         s.readiness = draft.readiness
         s.sleepScore = draft.sleepScore
+        s.activeScore = draft.activeScore ?? -1
+        s.eatingScore = draft.eatingScore ?? -1
+        s.projectedWeeklyKg = weeklyEnergyBalance().projectedKg
+        s.sleepNeedHours = sleepPlanTonight?.needHours ?? 0
+        s.recommendedBedEpoch = sleepPlanTonight?.recommendedBedEpoch ?? 0
         s.dayStatus = effectiveStatus(for: draft.date)
+        // Ring row for a future widget pass — prayer times aren't available here (AppStore stays
+        // prayer-agnostic), so a prayer ring simply reads unavailable/"—" in the snapshot for now.
+        let ringCtx = ringContext(prayerTimes: nil, nextFajr: nil)
+        s.rings = visibleRings.map { def in
+            let r = RingEngine.compute(def, entry: draft, ctx: ringCtx)
+            return SnapshotRing(title: String(def.displayTitle.prefix(24)), pct: Int((r.fraction * 100).rounded()),
+                                display: String(r.displayValue.prefix(24)), colorHex: def.colorHex)
+        }
+        s.topTip = String((dayTips.first ?? "").prefix(120))
         SharedStore.save(s)
         SharedStore.save(s, suite: SharedStore.watchAppGroup)
         WidgetCenter.shared.reloadAllTimelines()
@@ -830,7 +872,7 @@ final class AppStore: ObservableObject {
         switch def.link {
         case .manual: return e.habitState[def.id] ?? false
         case .protein: return (Double(e.proteinG) ?? 0) >= targets.protein
-        case .prayer: return e.prayers.isOn(def.prayerName)
+        case .prayer: return def.effectivePrayerNames.allSatisfy { e.prayers.isOn($0) }   // multi-prayer goal: all required prayers marked
         case .steps: return (Double(e.steps) ?? 0) >= (def.threshold > 0 ? def.threshold : targets.steps)
         case .activeEnergy: return e.activeKcal >= (def.threshold > 0 ? def.threshold : 400)
         case .water: return Double(e.waterMl) >= (def.threshold > 0 ? def.threshold : waterTargetMl)
@@ -878,6 +920,57 @@ final class AppStore: ObservableObject {
     func deleteHabit(_ id: String) {
         data.habits.removeAll { $0.id == id }
         persistData(); publishSnapshot()
+    }
+
+    // MARK: - Rings (Today ring row + custom rings)
+
+    /// All rings in editor order (for the ring editor / reorder sheet).
+    var allRingsOrdered: [RingDef] { data.rings.sorted { $0.order < $1.order } }
+
+    /// The rings actually shown on Today: enabled, in order, capped to the user's chosen count (3 or 4).
+    var visibleRings: [RingDef] {
+        Array(allRingsOrdered.filter { $0.enabled }.prefix(settings.visibleRingCount))
+    }
+
+    func addRing(_ r: RingDef) {
+        var def = r
+        def.order = (data.rings.map(\.order).max() ?? -1) + 1
+        data.rings.append(def)
+        persistData(); publishSnapshot()
+    }
+    func updateRing(_ r: RingDef) {
+        if let i = data.rings.firstIndex(where: { $0.id == r.id }) { data.rings[i] = r }
+        persistData(); publishSnapshot()
+    }
+    func deleteRing(_ id: String) {
+        data.rings.removeAll { $0.id == id }
+        persistData(); publishSnapshot()
+    }
+    func setRingEnabled(_ id: String, _ on: Bool) {
+        if let i = data.rings.firstIndex(where: { $0.id == id }) { data.rings[i].enabled = on }
+        persistData(); publishSnapshot()
+    }
+    func moveRing(from source: IndexSet, to destination: Int) {
+        var ordered = allRingsOrdered
+        ordered.move(fromOffsets: source, toOffset: destination)
+        for (i, var r) in ordered.enumerated() { r.order = i; ordered[i] = r }
+        for r in ordered { if let i = data.rings.firstIndex(where: { $0.id == r.id }) { data.rings[i] = r } }
+        persistData(); publishSnapshot()
+    }
+    func setVisibleRingCount(_ n: Int) {
+        updateSettings { $0.visibleRingCount = min(4, max(3, n)) }
+        publishSnapshot()
+    }
+
+    /// Local context a ring might need beyond the day's Entry (targets, hydration target, prayer times).
+    /// `prayerTimes`/`nextFajr` come from the caller (TodayView, which already has PrayerManager) —
+    /// AppStore stays prayer-agnostic, same pattern as `togglePrayer`.
+    func ringContext(prayerTimes: PrayerTimes?, nextFajr: Date?) -> RingEngine.Context {
+        RingEngine.Context(waterTargetMl: waterTargetMl, studyGoalHours: targets.studyHours,
+                           proteinTargetG: targets.protein, prayerTimes: prayerTimes, nextFajr: nextFajr)
+    }
+    func ringResult(_ def: RingDef, prayerTimes: PrayerTimes?, nextFajr: Date?) -> RingResult {
+        RingEngine.compute(def, entry: draft, ctx: ringContext(prayerTimes: prayerTimes, nextFajr: nextFajr))
     }
 
     func sortedEntries() -> [Entry] {
@@ -1160,6 +1253,19 @@ final class AppStore: ObservableObject {
         }
     }
 
+    /// Correct one AI-estimated meal's calories; recomputes the whole-day total (+ quick-logged items
+    /// on top, matching `estimate()`) so the structured estimate stays the source of truth after editing.
+    func updateAIMealCalories(at index: Int, calories: Double) {
+        mutate { d in
+            guard var ai = d.ai, ai.meals.indices.contains(index) else { return }
+            ai.meals[index].calories = max(0, calories)
+            ai.total.calories = ai.meals.reduce(0) { $0 + ($1.calories ?? 0) }
+            d.ai = ai
+            let logCal = d.logged.reduce(0) { $0 + $1.calories * Double(max(1, $1.qty)) }
+            d.calories = String(Int(((ai.total.calories ?? 0) + logCal).rounded()))
+        }
+    }
+
     /// Verifies the current provider/model/key (or Ollama host) with a tiny round-trip.
     func testAIConnection() async throws -> String {
         try await estimator.testConnection(settings: settings)
@@ -1175,6 +1281,17 @@ final class AppStore: ObservableObject {
 
     func items(of kind: CatalogKind) -> [CatalogItem] {
         data.catalog.filter { $0.kind == kind }.sorted { $0.name.lowercased() < $1.name.lowercased() }
+    }
+
+    /// A short, context-relevant slice of the library for quick-add — tagged to the current meal,
+    /// or (for untagged items) favorites/most-used — instead of dumping the whole library as chips.
+    func suggestedQuickAddItems(of kind: CatalogKind, mealKey: String?) -> [CatalogItem] {
+        let all = items(of: kind)
+        let tagged = mealKey.map { key in all.filter { $0.mealTags.contains(key) } } ?? []
+        let untaggedFavored = all.filter { $0.mealTags.isEmpty && ($0.favorite || $0.useCount > 0) }
+            .sorted { ($0.favorite ? 1 : 0, $0.useCount, $0.lastUsedEpoch) > ($1.favorite ? 1 : 0, $1.useCount, $1.lastUsedEpoch) }
+        var seen = Set<String>()
+        return (tagged + untaggedFavored).filter { seen.insert($0.id).inserted }.prefix(8).map { $0 }
     }
 
     func addOrUpdate(_ item: CatalogItem) {
@@ -1257,6 +1374,103 @@ final class AppStore: ObservableObject {
         sortedEntries().contains { $0.date < date && $0.meals.hasAny }
     }
 
+    // MARK: - Structured food log (A1) + lookup chain (A2)
+
+    /// Food entries for one meal, in log order.
+    func foodEntries(_ mealKey: String) -> [FoodEntry] { draft.foodEntries.filter { $0.mealKey == mealKey } }
+
+    /// Structured day totals from the food log (per-serving × qty).
+    var foodTotals: (kcal: Double, protein: Double, carbs: Double, fat: Double, fiber: Double, sodium: Double) {
+        draft.foodEntries.reduce(into: (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)) { acc, e in
+            acc.0 += e.totalKcal; acc.1 += e.totalProtein; acc.2 += e.totalCarbs
+            acc.3 += e.totalFat; acc.4 += e.totalFiber; acc.5 += e.totalSodium
+        }
+    }
+
+    /// Tier 1+2 search (library → bundled DB), offline & synchronous — for search-as-you-type.
+    /// NO network, NO LLM: a food the user already knows never triggers an AI call.
+    func searchFood(_ query: String) -> [FoodMatch] { FoodLookup.local(query, catalog: data.catalog) }
+
+    /// Tier 3: explicit Open Food Facts online search (network).
+    func searchFoodOnline(_ query: String) async -> [FoodMatch] { await FoodLookup.off(query) }
+
+    /// Add a resolved match as a structured entry — no AI involved.
+    func addFoodMatch(_ match: FoodMatch, mealKey: String, qty: Double = 1) {
+        addFoodEntry(match.toEntry(mealKey: mealKey, qty: qty))
+    }
+
+    /// Hand-entered food (name + calories, optional protein) — the search+manual path.
+    func addManualFood(name: String, kcal: Double, protein: Double = 0, mealKey: String, qty: Double = 1) {
+        addFoodEntry(FoodEntry(mealKey: mealKey, name: name, qty: qty, servingLabel: "1 serving",
+                               kcal: kcal, protein: protein, source: .manual))
+    }
+
+    func addFoodEntry(_ entry: FoodEntry) {
+        mutate { d in
+            d.foodEntries.append(entry)
+            d.calories = adjust(d.calories, by: entry.totalKcal)
+            d.proteinG = adjust(d.proteinG, by: entry.totalProtein)
+        }
+    }
+    func setFoodQty(_ id: String, qty: Double) {
+        mutate { d in
+            guard let i = d.foodEntries.firstIndex(where: { $0.id == id }) else { return }
+            let old = d.foodEntries[i]
+            let newQty = max(0, qty)
+            if newQty == 0 {
+                d.foodEntries.remove(at: i)
+                d.calories = adjust(d.calories, by: -old.totalKcal)
+                d.proteinG = adjust(d.proteinG, by: -old.totalProtein)
+                return
+            }
+            d.calories = adjust(d.calories, by: old.kcal * (newQty - old.qty))
+            d.proteinG = adjust(d.proteinG, by: old.protein * (newQty - old.qty))
+            d.foodEntries[i].qty = newQty
+        }
+    }
+    /// Replace an entry's editable fields (name / per-serving macros) and reconcile day totals.
+    func updateFoodEntry(_ entry: FoodEntry) {
+        mutate { d in
+            guard let i = d.foodEntries.firstIndex(where: { $0.id == entry.id }) else { return }
+            let old = d.foodEntries[i]
+            d.foodEntries[i] = entry
+            d.calories = adjust(d.calories, by: entry.totalKcal - old.totalKcal)
+            d.proteinG = adjust(d.proteinG, by: entry.totalProtein - old.totalProtein)
+        }
+    }
+    func removeFoodEntry(_ id: String) {
+        mutate { d in
+            guard let i = d.foodEntries.firstIndex(where: { $0.id == id }) else { return }
+            let e = d.foodEntries.remove(at: i)
+            d.calories = adjust(d.calories, by: -e.totalKcal)
+            d.proteinG = adjust(d.proteinG, by: -e.totalProtein)
+        }
+    }
+
+    /// NL → structured entries. Parses the sentence with the LLM, then upgrades each item's numbers
+    /// to trusted library/DB values when the name is known (so the AI's guess is only kept for foods
+    /// nothing else covers). Returns the count added. Throws if the AI call fails and nothing matched.
+    @discardableResult
+    func logMealText(_ text: String, mealKey: String) async throws -> Int {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return 0 }
+        let parsed = try await estimator.parseFoodItems(text: trimmed, settings: settings)
+        var added = 0
+        for var item in parsed {
+            item.mealKey = mealKey
+            if let known = FoodLookup.local(item.name, catalog: data.catalog).first(where: { $0.source.trusted }) {
+                item.servingLabel = known.servingLabel.isEmpty ? item.servingLabel : known.servingLabel
+                item.kcal = known.kcal; item.protein = known.protein; item.carbs = known.carbs
+                item.fat = known.fat; item.fiber = known.fiber
+                item.sodium = known.sodium > 0 ? known.sodium : item.sodium
+                item.micros = known.micros; item.source = known.source
+            }
+            addFoodEntry(item)
+            added += 1
+        }
+        return added
+    }
+
     // MARK: - Quick logging
 
     func isLogged(_ itemID: String) -> Bool {
@@ -1295,7 +1509,76 @@ final class AppStore: ObservableObject {
                                            carbs: item.carbs, fat: item.fat, fiber: item.fiber,
                                            micros: item.micros, qty: newQty))
             }
+            if delta > 0, let idx = data.catalog.firstIndex(where: { $0.id == item.id }) {
+                data.catalog[idx].useCount += 1
+                data.catalog[idx].lastUsedEpoch = Date().timeIntervalSince1970
+            }
         }
+    }
+
+    // MARK: - Meal / day text export
+
+    private func entry(for dateString: String) -> Entry? {
+        dateString == draft.date ? draft : data.entries[dateString]
+    }
+    private static let mealKeys = ["breakfast", "snacks", "lunch", "dinner", "drinks"]
+    private func mealText(_ e: Entry, key: String) -> String {
+        switch key {
+        case "breakfast": return e.meals.breakfast
+        case "snacks": return e.meals.snacks
+        case "lunch": return e.meals.lunch
+        case "dinner": return e.meals.dinner
+        case "drinks": return e.meals.drinks
+        default: return ""
+        }
+    }
+    private func mealLabel(_ key: String) -> String { key.capitalized }
+
+    /// Plain-text export of one meal — its logged text plus the matching AI estimate row, if any.
+    func exportMealText(_ dateString: String, mealKey: String) -> String {
+        guard let e = entry(for: dateString) else { return "" }
+        var lines = ["\(mealLabel(mealKey)) — \(dateString)"]
+        let text = mealText(e, key: mealKey)
+        if !text.isEmpty { lines.append(text) }
+        if let ai = e.ai?.meals.first(where: { $0.label.lowercased().contains(mealKey) }) {
+            lines.append(String(format: "%.0f kcal · P%.0fg C%.0fg F%.0fg",
+                                ai.calories ?? 0, ai.protein ?? 0, ai.carbs ?? 0, ai.fat ?? 0))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Day-wise text export: each meal (with its AI estimate if matched), quick-logged items, and totals.
+    func exportDayText(_ dateString: String) -> String {
+        guard let e = entry(for: dateString), e.isMeaningful else { return "Nothing logged for \(dateString)." }
+        var lines = ["Win the Day — \(dateString)", ""]
+        for key in Self.mealKeys {
+            let structured = e.foodEntries.filter { $0.mealKey == key }
+            let text = mealText(e, key: key)
+            guard !structured.isEmpty || !text.isEmpty else { continue }
+            lines.append(mealLabel(key).uppercased())
+            for f in structured {
+                let qtyStr = f.qty == f.qty.rounded() ? "×\(Int(f.qty))" : String(format: "×%.2g", f.qty)
+                lines.append("\(f.name) \(qtyStr) — \(Int(f.totalKcal)) kcal · P\(Int(f.totalProtein))g")
+            }
+            if !text.isEmpty { lines.append(text) }
+            if let ai = e.ai?.meals.first(where: { $0.label.lowercased().contains(key) }) {
+                lines.append(String(format: "%.0f kcal · P%.0fg C%.0fg F%.0fg",
+                                    ai.calories ?? 0, ai.protein ?? 0, ai.carbs ?? 0, ai.fat ?? 0))
+            }
+            lines.append("")
+        }
+        if !e.logged.isEmpty {
+            lines.append("QUICK-LOGGED")
+            for item in e.logged {
+                let qtyStr = item.qty > 1 ? " ×\(item.qty)" : ""
+                lines.append("\(item.name)\(qtyStr) — \(Int(item.calories * Double(item.qty))) kcal")
+            }
+            lines.append("")
+        }
+        lines.append("TOTAL")
+        lines.append(String(format: "%.0f kcal · %.0fg protein", Double(e.calories) ?? 0, Double(e.proteinG) ?? 0))
+        if let es = e.eatingScore { lines.append("Eating score: \(es)/100") }
+        return lines.joined(separator: "\n")
     }
 
     struct DayNutrition {
@@ -1339,6 +1622,12 @@ final class AppStore: ObservableObject {
             carbs += item.carbs * q; fat += item.fat * q; fiber += item.fiber * q
             add(item.micros.map { Micro(name: $0.name, amount: $0.amount * q, unit: $0.unit) })
         }
+        // Structured food entries (A1).
+        for e in draft.foodEntries {
+            carbs += e.totalCarbs; fat += e.totalFat; fiber += e.totalFiber
+            if e.totalSodium > 0 { add([Micro(name: "Sodium", amount: e.totalSodium, unit: "mg")]) }
+            add(e.micros.map { Micro(name: $0.name, amount: $0.amount * e.qty, unit: $0.unit) })
+        }
         if let t = draft.ai?.total {
             carbs += t.carbs ?? 0; fat += t.fat ?? 0; fiber += t.fiber ?? 0; add(t.micros ?? [])
         }
@@ -1368,6 +1657,94 @@ final class AppStore: ObservableObject {
         return out
     }
 
+    // MARK: - Eating score
+
+    /// Compute the Eating score for `entry` from its own logged nutrition + activity + targets.
+    /// Pure/sync (no HealthKit calls) — every input already lives on the entry/targets, so this
+    /// can run inline in `commit()` on every edit.
+    func eatingScoreResult(for entry: Entry) -> EatingScorer.Result {
+        let isDraft = entry.date == draft.date
+        let n = isDraft ? dayNutrients() : Self.nutrients(of: entry)
+        let microRatios = (isDraft ? microProgress() : Self.microProgress(of: entry, nutrients: n)).map { min(1.5, $0.ratio) }
+        let bedRef = entry.sleep?.bedEpoch ?? (entry.date == draft.date ? (sleepPlanTonight?.recommendedBedEpoch ?? 0) : 0)
+        let inputs = EatingScorer.Inputs(
+            calories: Double(entry.calories) ?? 0, proteinG: Double(entry.proteinG) ?? 0,
+            carbsG: n.carbs, fatG: n.fat, microRatios: microRatios,
+            weightKg: Double(entry.weight) ?? 0, heightCm: targets.heightCm, ageYears: targets.ageYears,
+            sexMale: targets.sexMale, activeKcal: entry.activeKcal, goal: targets.goal,
+            proteinTargetG: targets.protein, dinnerEpoch: entry.mealTimes["dinner"] ?? 0, referenceBedEpoch: bedRef)
+        return EatingScorer.compute(inputs)
+    }
+
+    /// `dayNutrients()`/`microProgress()` read `draft` implicitly; these mirror them for an arbitrary
+    /// (typically past, already-saved) entry so the weekly projection can score days that aren't the draft.
+    private static func nutrients(of e: Entry) -> DayNutrition {
+        var carbs = 0.0, fat = 0.0, fiber = 0.0
+        for item in e.logged {
+            let q = Double(max(1, item.qty))
+            carbs += item.carbs * q; fat += item.fat * q; fiber += item.fiber * q
+        }
+        if let t = e.ai?.total { carbs += t.carbs ?? 0; fat += t.fat ?? 0; fiber += t.fiber ?? 0 }
+        var n = DayNutrition(); n.carbs = carbs; n.fat = fat; n.fiber = fiber
+        return n
+    }
+    private static func microProgress(of e: Entry, nutrients n: DayNutrition) -> [MicroProgress] {
+        var byName: [String: (Double, String)] = [:]
+        var order: [String] = []
+        func add(_ ms: [Micro]) {
+            for m in ms where m.amount > 0 {
+                if let x = byName[m.name] { byName[m.name] = (x.0 + m.amount, x.1) } else { byName[m.name] = (m.amount, m.unit); order.append(m.name) }
+            }
+        }
+        for item in e.logged { let q = Double(max(1, item.qty)); add(item.micros.map { Micro(name: $0.name, amount: $0.amount * q, unit: $0.unit) }) }
+        add(e.ai?.total.micros ?? [])
+        var list = order.map { Micro(name: $0, amount: byName[$0]!.0, unit: byName[$0]!.1) }
+        if n.fiber > 0 { list.insert(Micro(name: "Fiber", amount: n.fiber, unit: "g"), at: 0) }
+        var out: [MicroProgress] = []
+        for m in list {
+            guard let (rda, unit, limit) = NutritionRDA.target(for: m.name), rda > 0 else { continue }
+            out.append(MicroProgress(name: m.name, unit: m.unit.isEmpty ? unit : m.unit, amount: m.amount, rda: rda, ratio: min(1.5, m.amount / rda), limit: limit))
+        }
+        return out
+    }
+
+    struct WeeklyEnergyBalance {
+        var daysScored = 0
+        var netKcalWeek = 0.0
+        var projectedKg = 0.0
+        var aggressive = false
+        var avgEatingScore: Double?
+        var smoothedWeightKg: Double?
+    }
+
+    /// Net calorie balance over the last 7 logged days → projected weekly weight change (7700 kcal/kg),
+    /// flagged if the rate or any single day's deficit looks aggressive. Weight is a 7-day rolling mean.
+    func weeklyEnergyBalance() -> WeeklyEnergyBalance {
+        let cal = Calendar.current
+        let dates = (0..<7).compactMap { cal.date(byAdding: .day, value: -$0, to: Date()).map(Self.dateString) }
+        let entries = dates.compactMap { $0 == draft.date ? draft : data.entries[$0] }
+        var bal = WeeklyEnergyBalance()
+        var netSum = 0.0, scoredDays = 0, aggressiveDay = false
+        var scores: [Double] = []
+        for e in entries {
+            let r = eatingScoreResult(for: e)
+            if r.available { scores.append(Double(r.score)) }
+            guard r.tdee > 0, Double(e.calories) ?? 0 > 0 else { continue }
+            netSum += r.netKcal
+            scoredDays += 1
+            if r.netKcal < -500 { aggressiveDay = true }
+        }
+        bal.daysScored = scoredDays
+        bal.netKcalWeek = netSum
+        bal.projectedKg = netSum / 7700
+        bal.avgEatingScore = scores.isEmpty ? nil : scores.reduce(0, +) / Double(scores.count)
+        let weights = entries.compactMap { Double($0.weight) }.filter { $0 > 0 }
+        bal.smoothedWeightKg = weights.isEmpty ? nil : weights.reduce(0, +) / Double(weights.count)
+        if let w = bal.smoothedWeightKg, w > 0, abs(bal.projectedKg) / w > 0.01 { aggressiveDay = true }
+        bal.aggressive = aggressiveDay
+        return bal
+    }
+
     private func adjust(_ field: String, by delta: Double) -> String {
         let base = Double(field) ?? 0
         let v = max(0, (base + delta).rounded())
@@ -1376,29 +1753,26 @@ final class AppStore: ObservableObject {
 
     // MARK: - Prayers (tick off after praying)
 
-    func togglePrayer(_ name: PrayerTimes.Name) {
+    /// Toggle a prayer for today. `times`/`nextFajr` (from `PrayerManager`) let us classify
+    /// prompt/on-time/later/qadha at the moment of marking; pass nil to mark untimed (`.unknown`).
+    func togglePrayer(_ name: PrayerTimes.Name, times: PrayerTimes? = nil, nextFajr: Date? = nil) {
+        guard name.isPrayer else { return }
+        let key = name.rawValue
         mutate { d in
-            switch name {
-            case .fajr: d.prayers.fajr.toggle(); d.nn.fajr = d.prayers.fajr
-            case .dhuhr: d.prayers.dhuhr.toggle()
-            case .asr: d.prayers.asr.toggle()
-            case .maghrib: d.prayers.maghrib.toggle()
-            case .isha: d.prayers.isha.toggle()
-            case .sunrise: break
+            if d.prayers.isOn(key) {
+                d.prayers.setOn(key, false)
+                if name == .fajr { d.nn.fajr = false }
+            } else {
+                let now = Date()
+                let band: PrayerBand = times.map { PrayerClassifier.classify(name, markedAt: now, today: $0, nextFajr: nextFajr) } ?? .unknown
+                d.prayers.setOn(key, true, at: now.timeIntervalSince1970, band: band)
+                if name == .fajr { d.nn.fajr = true }
             }
         }
     }
 
-    func isPrayed(_ name: PrayerTimes.Name) -> Bool {
-        switch name {
-        case .fajr: return draft.prayers.fajr
-        case .dhuhr: return draft.prayers.dhuhr
-        case .asr: return draft.prayers.asr
-        case .maghrib: return draft.prayers.maghrib
-        case .isha: return draft.prayers.isha
-        case .sunrise: return false
-        }
-    }
+    func isPrayed(_ name: PrayerTimes.Name) -> Bool { draft.prayers.isOn(name.rawValue) }
+    func prayerBand(_ name: PrayerTimes.Name) -> PrayerBand { draft.prayers.band(name.rawValue) }
 
     // MARK: - Photos
 
@@ -1514,7 +1888,20 @@ final class AppStore: ObservableObject {
     // MARK: - Readiness & sleep score
 
     @Published var readinessFactors: [ReadinessFactor] = []
+    @Published var sleepPlanTonight: SleepPlanner.Plan?
     var readinessToday: Int { draft.readiness }
+
+    /// Last `days` calendar days' Sleep/Readiness/Active scores (oldest→newest, zero/uncomputed dropped)
+    /// for the sleep module's mini trend graph.
+    func recentScores(days: Int = 14) -> (readiness: [Double], sleep: [Double], active: [Double]) {
+        let cal = Calendar.current
+        guard let start = cal.date(byAdding: .day, value: -(days - 1), to: cal.startOfDay(for: Date())) else { return ([], [], []) }
+        let startStr = Self.dateString(start)
+        let entries = sortedEntries().filter { $0.date >= startStr }
+        return (entries.compactMap { $0.readiness > 0 ? Double($0.readiness) : nil },
+                entries.compactMap { $0.sleepScore > 0 ? Double($0.sleepScore) : nil },
+                entries.compactMap { $0.activeScore.map(Double.init) })
+    }
 
     /// Compute the readiness + sleep sub-score for `dateString` from HealthKit + entry data.
     func computeReadiness(for dateString: String, health: HealthManager) async {
@@ -1522,36 +1909,73 @@ final class AppStore: ObservableObject {
         let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: day)) ?? Date()
         let sleep = await health.fetchSleepDetail(nightEnding: day)
         guard let sleep else {   // nothing to score
-            if dateString == draft.date { mutate { $0.sleep = nil; $0.readiness = 0; $0.sleepScore = 0 } }
+            if dateString == draft.date { mutate { $0.sleep = nil; $0.readiness = 0; $0.sleepScore = 0; $0.activeScore = nil } }
             readinessFactors = []
             return
         }
-        async let hrv = health.fetchHRV(asOf: endOfDay)
+        async let hrvMedian = health.fetchHRVOvernightMedian(nightEnding: day)
         async let rhr = health.fetchRestingHR(asOf: endOfDay)
-        async let hrvBase = health.hrvBaseline()
-        async let rhrBase = health.rhrBaseline()
-        let (hrvV, rhrV, hrvB, rhrB) = await (hrv, rhr, hrvBase, rhrBase)
+        async let resp = health.fetchRespiratoryRateOvernightMedian(nightEnding: day)
+        async let hrvStats = health.hrvBaselineStats()
+        async let rhrStats = health.rhrBaselineStats()
+        async let respStats = health.respBaselineStats()
+        async let sampleNights = health.hrvSampleNights()
+        let (hrvV, rhrV, respV, hrvB, rhrB, respB, nights) =
+            await (hrvMedian, rhr, resp, hrvStats, rhrStats, respStats, sampleNights)
 
-        // Prior-day load + typical load from logged entries.
+        // Prior-day load (drives strain S), typical load & sleep-need baseline from local history.
         let prevDate = Self.dateString(Calendar.current.date(byAdding: .day, value: -1, to: day) ?? day)
         let prior = data.entries[prevDate]
         let priorKcal = prior?.activeKcal ?? 0
         let recentKcals = data.entries.values.map { $0.activeKcal }.filter { $0 > 0 }
         let typicalKcal = recentKcals.isEmpty ? 0 : recentKcals.reduce(0, +) / Double(recentKcals.count)
-        let dinner = prior?.mealTimes["dinner"] ?? 0   // dinner the evening before this night
+        let recentAsleepMin = data.entries.values.compactMap { $0.sleep?.asleepMin }.filter { $0 > 0 }.sorted()
+        let sleepNeedBaseline = recentAsleepMin.isEmpty ? 0 : recentAsleepMin[recentAsleepMin.count / 2]
 
-        let inputs = ReadinessScorer.Inputs(
-            sleep: sleep, hrv: hrvV ?? 0, restingHR: rhrV ?? 0,
-            hrvBaseline: hrvB ?? 0, rhrBaseline: rhrB ?? 0,
-            priorActiveKcal: priorKcal, typicalActiveKcal: typicalKcal,
-            dinnerEpoch: dinner, sleepTargetHours: 7.5)
-        let r = ReadinessScorer.compute(inputs)
+        // Capped 3-night sleep debt vs each of those nights' own recorded duration (proxy for "need").
+        var debt = 0.0
+        for offset in 1...3 {
+            let d = Self.dateString(Calendar.current.date(byAdding: .day, value: -offset, to: day) ?? day)
+            if let asleep = data.entries[d]?.sleep?.asleepMin, asleep > 0 {
+                debt += max(0, (sleepNeedBaseline > 0 ? sleepNeedBaseline : 480) - asleep)
+            }
+        }
+
+        // Up to the last 4 nights' mid-sleep times (incl. tonight) for the Consistency sub-score.
+        var midSleeps: [Double] = []
+        for offset in 0...3 {
+            let d = Self.dateString(Calendar.current.date(byAdding: .day, value: -offset, to: day) ?? day)
+            if let m = data.entries[d]?.sleep?.midSleepEpoch, m > 0 { midSleeps.append(m) }
+        }
+        if sleep.midSleepEpoch > 0 && !midSleeps.contains(sleep.midSleepEpoch) { midSleeps.append(sleep.midSleepEpoch) }
+
+        let baselines = ScoreEngine.Baselines(
+            lnHrvMean: hrvB?.mean ?? 0, lnHrvSD: hrvB?.sd ?? 0,
+            rhrMean: rhrB?.mean ?? 0, rhrSD: rhrB?.sd ?? 0,
+            respMean: respB?.mean ?? 0, respSD: respB?.sd ?? 0,
+            sleepNeedBaselineMin: sleepNeedBaseline, typicalActiveKcal: typicalKcal, sampleNights: nights)
+
+        let checkIn: DayCheckIn = dateString == draft.date ? draft.checkIn : (data.entries[dateString]?.checkIn ?? DayCheckIn())
+        let inputs = ScoreEngine.Inputs(
+            sleep: sleep, hrvOvernightMedian: hrvV ?? 0, restingHR: rhrV ?? 0, respiratoryRate: respV ?? 0,
+            priorDaySleepDebtMin: debt, recentMidSleepEpochs: midSleeps, activeKcal: priorKcal,
+            checkIn: checkIn, baselines: baselines)
+        let r = ScoreEngine.compute(inputs)
         readinessFactors = r.factors
 
         if dateString == draft.date {
-            mutate { $0.sleep = sleep; $0.readiness = r.readiness; $0.sleepScore = r.sleepScore }
+            let planS = ScoreEngine.strain(activeKcal: priorKcal, typicalActiveKcal: typicalKcal)
+            let recentWakeEpochs = sortedEntries().suffix(14).compactMap { $0.sleep?.wakeEpoch }.filter { $0 > 0 }
+            sleepPlanTonight = SleepPlanner.plan(baselineNeedMin: sleepNeedBaseline, strainS: planS,
+                                                 debtMin: debt, recentWakeEpochs: recentWakeEpochs)
+        }
+
+        if dateString == draft.date {
+            mutate { $0.sleep = sleep; $0.readiness = r.readiness; $0.sleepScore = r.sleepScore
+                     $0.activeScore = r.activeAvailable ? r.activeScore : nil }
         } else if var e = data.entries[dateString] {
             e.sleep = sleep; e.readiness = r.readiness; e.sleepScore = r.sleepScore
+            e.activeScore = r.activeAvailable ? r.activeScore : nil
             data.entries[dateString] = e
             persistData()
         }
@@ -1710,6 +2134,89 @@ final class AppStore: ObservableObject {
         suggestionLoading = false
     }
 
+    // MARK: - Weather module tips rotator
+
+    private let dayTipsKey = "day_tips_v1"
+    private let dayTipsSlotKey = "day_tips_slot_v1"
+
+    /// Refreshes the tips rotator — at most one AI call per (date, time-slot); loads the cached
+    /// slot from a previous launch first so the panel is never empty on appear.
+    func refreshDayTips(force: Bool = false) async {
+        let slot = date + "/" + timeSlot
+        if dayTips.isEmpty, dayTipsSlot.isEmpty {
+            let ud = UserDefaults.standard
+            if ud.string(forKey: dayTipsSlotKey) == slot, let saved = ud.stringArray(forKey: dayTipsKey), !saved.isEmpty {
+                dayTips = saved; dayTipsSlot = slot
+            }
+        }
+        if !force && slot == dayTipsSlot && !dayTips.isEmpty { return }
+        dayTipsLoading = true
+        do {
+            let tips = try await estimator.suggestTips(prompt: dayTipsPrompt(), settings: settings)
+            if !tips.isEmpty {
+                dayTips = tips; dayTipsSlot = slot
+                UserDefaults.standard.set(tips, forKey: dayTipsKey)
+                UserDefaults.standard.set(slot, forKey: dayTipsSlotKey)
+            } else if dayTips.isEmpty {
+                dayTips = fallbackDayTips()
+            }
+        } catch {
+            if dayTips.isEmpty { dayTips = fallbackDayTips() }
+        }
+        dayTipsLoading = false
+    }
+
+    private func dayTipsPrompt() -> String {
+        let d = draft
+        var facts = ["Time of day: \(timeSlot)."]
+        if !weatherContext.isEmpty {
+            facts.append("Weather: \(weatherContext.split(separator: ";").first.map(String.init) ?? weatherContext).")
+        }
+        if d.sleep != nil { facts.append("Readiness \(d.readiness)/100, sleep score \(d.sleepScore)/100.") }
+        if let es = d.eatingScore { facts.append("Eating score \(es)/100.") }
+        if !d.calories.isEmpty {
+            facts.append("Logged \(d.calories) kcal, \(d.proteinG.isEmpty ? "0" : d.proteinG)g protein so far, target \(Int(targets.calories)) kcal / \(Int(targets.protein))g protein.")
+        }
+        if let plan = sleepPlanTonight {
+            facts.append(String(format: "Aim for %.1fh sleep tonight.", plan.needHours))
+        }
+        if DayStatus.isProtected(d.status) { facts.append("Day flagged: \(DayStatus.label(d.status)) — keep it gentle.") }
+
+        return """
+        You are a sharp, encouraging personal coach inside "Win the Day". Give 4 short, varied, specific tips for right now, grounded ONLY in these real facts (never invent numbers):
+        \(facts.joined(separator: " "))
+
+        Mix categories across the 4 tips: one about food/hydration, one about movement/rest, one about weather or the day's plan, one about readiness/sleep. Each tip \u{2264}18 words, no greeting, no numbering, plain sentences.
+        Respond with ONLY this JSON: {"tips":["...","...","...","..."]}
+        """
+    }
+
+    /// Deterministic local tips so the rotator is never empty — used when the AI call fails or
+    /// returns nothing usable (e.g. Apple Intelligence / a non-JSON local model).
+    private func fallbackDayTips() -> [String] {
+        var tips: [String] = []
+        switch timeSlot {
+        case "morning": tips.append("Start with a glass of water before your first meal.")
+        case "midday": tips.append("A short walk after lunch helps digestion and afternoon focus.")
+        case "afternoon": tips.append("A two-minute stretch resets focus better than more caffeine.")
+        case "evening": tips.append("Wind screens down an hour before bed for better sleep.")
+        default: tips.append("Keep lights low if you're up late — it protects tomorrow's sleep.")
+        }
+        if draft.readiness > 0 && draft.readiness < 45 {
+            tips.append("Readiness is low today — an easier session beats pushing through.")
+        } else {
+            tips.append("Stay consistent — small daily wins compound.")
+        }
+        if let es = draft.eatingScore, es < 60 {
+            tips.append("A protein-forward next meal will help your eating score.")
+        } else {
+            tips.append("Balance your next plate with some colour — veggies count.")
+        }
+        tips.append(weatherContext.isEmpty ? "Check the weather tile for today's outdoor advice."
+                    : "Check today's outdoor window before you plan a walk or run.")
+        return tips
+    }
+
     private func suggestionPrompt() -> String {
         let d = draft
         let sc = score(d)
@@ -1736,46 +2243,173 @@ final class AppStore: ObservableObject {
         """
     }
 
-    // MARK: - Coach chat
+    // MARK: - Coach chat (multiple threads + tool calling)
 
-    private func loadChat() {
-        guard let raw = UserDefaults.standard.data(forKey: chatKey),
-              let msgs = try? JSONDecoder().decode([ChatMessage].self, from: raw) else { return }
-        chatMessages = msgs
+    /// Passthrough to the active thread's messages — kept so `CoachChatView` barely changed.
+    var chatMessages: [ChatMessage] {
+        threads.first { $0.id == activeThreadID }?.messages ?? []
     }
+    var activeThread: CoachThread? { threads.first { $0.id == activeThreadID } }
+    /// Threads newest-first, for the chat list.
+    var threadsOrdered: [CoachThread] { threads.sorted { $0.updatedEpoch > $1.updatedEpoch } }
 
-    private func persistChat() {
-        let trimmed = Array(chatMessages.suffix(40))
-        chatMessages = trimmed
-        if let raw = try? JSONEncoder().encode(trimmed) {
-            UserDefaults.standard.set(raw, forKey: chatKey)
+    private func loadThreads() {
+        if let raw = UserDefaults.standard.data(forKey: threadsKey),
+           let saved = try? JSONDecoder().decode([CoachThread].self, from: raw), !saved.isEmpty {
+            threads = saved
+            activeThreadID = UserDefaults.standard.string(forKey: activeThreadKey) ?? saved[0].id
+            if !threads.contains(where: { $0.id == activeThreadID }) { activeThreadID = threadsOrdered.first?.id ?? "" }
+            return
+        }
+        // One-time migration: fold the old single transcript into thread #1.
+        if let raw = UserDefaults.standard.data(forKey: legacyChatKey),
+           let msgs = try? JSONDecoder().decode([ChatMessage].self, from: raw), !msgs.isEmpty {
+            var t = CoachThread()
+            t.title = msgs.first { $0.isUser }?.text.prefix(40).description ?? "Earlier chat"
+            t.messages = msgs
+            threads = [t]
+            activeThreadID = t.id
+            persistThreads()
+            UserDefaults.standard.removeObject(forKey: legacyChatKey)
         }
     }
 
+    private func persistThreads() {
+        if let raw = try? JSONEncoder().encode(threads) {
+            UserDefaults.standard.set(raw, forKey: threadsKey)
+        }
+        UserDefaults.standard.set(activeThreadID, forKey: activeThreadKey)
+    }
+
+    /// Create a new thread, make it active, and return its id.
+    @discardableResult
+    func newThread() -> String {
+        let t = CoachThread()
+        threads.append(t)
+        activeThreadID = t.id
+        persistThreads()
+        return t.id
+    }
+    func switchThread(_ id: String) {
+        guard threads.contains(where: { $0.id == id }) else { return }
+        activeThreadID = id
+        persistThreads()
+    }
+    func renameThread(_ id: String, title: String) {
+        guard let i = threads.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        threads[i].title = trimmed.isEmpty ? "New chat" : String(trimmed.prefix(60))
+        persistThreads()
+    }
+    func deleteThread(_ id: String) {
+        threads.removeAll { $0.id == id }
+        if activeThreadID == id { activeThreadID = threadsOrdered.first?.id ?? "" }
+        persistThreads()
+    }
+    /// Clear the active thread's messages without deleting the thread itself.
     func clearChat() {
-        chatMessages = []
-        UserDefaults.standard.removeObject(forKey: chatKey)
+        guard let i = threads.firstIndex(where: { $0.id == activeThreadID }) else { return }
+        threads[i].messages = []
+        threads[i].updatedEpoch = Date().timeIntervalSince1970
+        persistThreads()
     }
 
     func sendChat(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !chatLoading else { return }
-        chatMessages.append(ChatMessage(role: "user", text: trimmed))
-        persistChat()
+        if activeThreadID.isEmpty || !threads.contains(where: { $0.id == activeThreadID }) { newThread() }
+        guard let i = threads.firstIndex(where: { $0.id == activeThreadID }) else { return }
+
+        threads[i].messages.append(ChatMessage(role: "user", text: trimmed))
+        if threads[i].title == "New chat" { threads[i].title = String(trimmed.prefix(40)) }
+        threads[i].updatedEpoch = Date().timeIntervalSince1970
+        persistThreads()
         chatLoading = true
-        // Send the last ~16 turns for context, capped to keep prompts lean.
-        let history = Array(chatMessages.suffix(16))
+
+        // Send the last ~16 turns; the model pulls anything else it needs via tools.
+        let history = Array(threads[i].messages.suffix(16))
+        let leanSystem = """
+        You are "Coach", a warm, sharp, concise personal coach living inside the user's daily tracker app "Win the Day". Answer in 1–4 short sentences unless asked for detail. Call the available tools to read the user's real data before answering anything about their day, week, meals, prayers, readiness or targets — never invent numbers. You can give meal ideas, training/recovery tips, study/focus advice and motivation. If asked something you can't know, say so briefly.
+        """
         do {
-            let reply = try await estimator.chat(system: coachContext(), history: history, settings: settings)
+            let reply = try await estimator.chatWithTools(system: leanSystem, history: history,
+                                                           tools: CoachToolRegistry.all, store: self, settings: settings)
             let clean = reply.trimmingCharacters(in: .whitespacesAndNewlines)
-            chatMessages.append(ChatMessage(role: "assistant",
-                                            text: clean.isEmpty ? "I didn\u{2019}t catch that — try rephrasing?" : clean))
+            threads[i].messages.append(ChatMessage(role: "assistant",
+                                                    text: clean.isEmpty ? "I didn\u{2019}t catch that — try rephrasing?" : clean))
         } catch {
-            chatMessages.append(ChatMessage(role: "assistant",
-                                            text: "Couldn\u{2019}t reach the AI: \(error.localizedDescription)"))
+            threads[i].messages.append(ChatMessage(role: "assistant",
+                                                    text: "Couldn\u{2019}t reach the AI: \(error.localizedDescription)"))
         }
-        persistChat()
+        threads[i].messages = Array(threads[i].messages.suffix(60))
+        threads[i].updatedEpoch = Date().timeIntervalSince1970
+        persistThreads()
         chatLoading = false
+    }
+
+    // MARK: - Coach tool executors (read-only; run synchronously — everything here is already local)
+
+    private func toolDate(_ raw: String?) -> String {
+        guard let raw, !raw.isEmpty else { return Self.dateString(Date()) }
+        return raw
+    }
+
+    func toolGetDay(_ dateArg: String?) -> String {
+        let d = toolDate(dateArg)
+        guard let e = entry(for: d), e.isMeaningful else { return "No log for \(d)." }
+        var lines = ["Day \(d) — score \(score(e))/\(activeHabits.count), status: \(DayStatus.label(e.status))"]
+        lines.append("Calories: \(e.calories.isEmpty ? "none" : e.calories), protein: \(e.proteinG.isEmpty ? "none" : e.proteinG)g, water: \(e.waterMl)ml")
+        lines.append("Meals — B:\(mealWithTime(e, "breakfast")) | L:\(mealWithTime(e, "lunch")) | D:\(mealWithTime(e, "dinner")) | S:\(mealWithTime(e, "snacks")) | Drinks:\(mealWithTime(e, "drinks"))")
+        lines.append("Prayers: \(e.prayers.count)/5, study/focus: \(fmtT(e.studyHours))h")
+        return lines.joined(separator: "\n")
+    }
+
+    func toolGetRecentDays(_ n: Int) -> String {
+        let recent = data.entries.values.filter { $0.isMeaningful }.sorted { $0.date > $1.date }.prefix(n)
+        guard !recent.isEmpty else { return "No recent logged days." }
+        return recent.map { e in
+            "\(e.date): score \(score(e))/\(activeHabits.count), \(e.calories.isEmpty ? "?" : e.calories) kcal, P\(e.proteinG.isEmpty ? "?" : e.proteinG)g, prayers \(e.prayers.count)/5, study \(fmtT(e.studyHours))h"
+        }.joined(separator: "\n")
+    }
+
+    func toolGetWeekStats() -> String {
+        let st = weeklyStats()
+        let wChange = st.weightChange.map { String(format: "%+.1f kg", $0) } ?? "n/a"
+        let prot = st.avgProtein.map { "\(Int($0))g" } ?? "n/a"
+        return "This week: \(st.daysLogged)/7 days logged, avg score \(String(format: "%.1f", st.avgScore))/\(activeHabits.count), \(st.perfectDays) perfect days, weight change \(wChange), avg protein \(prot), prayers \(st.prayersDone)/\(st.prayersPossible)."
+    }
+
+    func toolGetReadiness(_ dateArg: String?) -> String {
+        let d = toolDate(dateArg)
+        guard let e = entry(for: d) else { return "No data for \(d)." }
+        var lines = ["Readiness for \(d):"]
+        lines.append("Sleep \(e.sleepScore)/100, Readiness \(e.readiness)/100" +
+                     (e.activeScore.map { ", Active \($0)/100" } ?? ", Active: not computed") +
+                     (e.eatingScore.map { ", Eating \($0)/100" } ?? ", Eating: not enough data"))
+        if d == draft.date, !readinessFactors.isEmpty {
+            lines.append("Factors: " + readinessFactors.prefix(5).map { "\($0.label) \($0.delta >= 0 ? "+" : "")\($0.delta)" }.joined(separator: ", "))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    func toolGetFoodLog(_ dateArg: String?) -> String { exportDayText(toolDate(dateArg)) }
+
+    func toolGetPrayers(_ dateArg: String?) -> String {
+        let d = toolDate(dateArg)
+        guard let e = entry(for: d) else { return "No data for \(d)." }
+        let names = ["fajr", "dhuhr", "asr", "maghrib", "isha"]
+        let lines = names.map { "\($0.capitalized): \(e.prayers.band($0).label)" }
+        return "Prayers \(d) (\(e.prayers.count)/5 marked):\n" + lines.joined(separator: "\n")
+    }
+
+    func toolGetHealthIndex() -> String {
+        let h = healthIndex()
+        return h.isEmpty ? "No health profile recorded yet." : h
+    }
+
+    func toolGetTargets() -> String {
+        let prizeArrow = targets.prizeLowerIsBetter ? "≤" : "≥"
+        return "Targets: \(Int(targets.calories)) kcal, \(Int(targets.protein))g protein, \(Int(targets.steps)) steps, \(fmtT(targets.studyHours))h study/focus. Priority metric \"\(targets.prizeName)\": \(fmtT(targets.prizeCurrent))\(targets.prizeUnit) \u{2192} \(prizeArrow)\(fmtT(targets.prizeTarget))\(targets.prizeUnit). Mode: \(targets.workMode == "work" ? "Work" : "Study")."
     }
 
     /// System preamble: who the user is, today's numbers, targets, prize, recent days.

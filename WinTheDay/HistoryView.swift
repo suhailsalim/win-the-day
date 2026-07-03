@@ -5,6 +5,9 @@ struct HistoryView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var pickDate = Date()
+    @State private var exportedText: ExportedDayText?
+
+    private struct ExportedDayText: Identifiable { let id = UUID(); let text: String }
 
     private var days: [Entry] {
         store.sortedEntries().reversed()   // newest first
@@ -57,6 +60,7 @@ struct HistoryView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.fontWeight(.semibold) } }
             .onAppear { pickDate = AppStore.parse(store.date) }
+            .sheet(item: $exportedText) { ShareSheet(items: [$0.text]) }
         }
         .tint(Theme.accentDark)
     }
@@ -77,6 +81,11 @@ struct HistoryView: View {
                 Text(subtitle(e)).font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
             }
             Spacer()
+            if e.isMeaningful {
+                Button { exportedText = ExportedDayText(text: store.exportDayText(e.date)) } label: {
+                    Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                }.buttonStyle(.plain).padding(.trailing, 4)
+            }
             Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
         }
         .padding(.horizontal, 16).padding(.vertical, 11)

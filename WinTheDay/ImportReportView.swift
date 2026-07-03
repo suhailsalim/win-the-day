@@ -93,7 +93,7 @@ struct ImportReportView: View {
                 .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                 .frame(maxWidth: .infinity).padding(.vertical, 12)
                 .background(RoundedRectangle(cornerRadius: 13)
-                    .fill(LinearGradient(colors: [Color(hex: 0xECB477), Color(hex: 0xE29A4E)], startPoint: .top, endPoint: .bottom)))
+                    .fill(LinearGradient(colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)], startPoint: .top, endPoint: .bottom)))
             }
             .buttonStyle(.plain)
             .disabled(parsing || (imageBase64 == nil && text.trimmingCharacters(in: .whitespaces).isEmpty))

@@ -61,6 +61,7 @@ struct Entry: Codable, Equatable, Identifiable {
     var proteinG = ""
     var ai: AIResult?
     var logged: [LoggedItem] = []     // quick-logged catalog items applied to today's totals
+    var foodEntries: [FoodEntry] = [] // structured, editable food line items (A1)
     var photos: [String] = []         // filenames in Documents/photos
     var prayers = PrayerLog()
     var weightFromHealth = false      // weight was auto-filled from a smart-scale sample
@@ -74,6 +75,9 @@ struct Entry: Codable, Equatable, Identifiable {
     var sleep: SleepBreakdown?       // last night's sleep detail (from Health)
     var readiness: Int = 0           // 0–100 readiness score (cached)
     var sleepScore: Int = 0          // 0–100 sleep sub-score (cached)
+    var activeScore: Int?            // 0–100 active/strain score (cached); nil = not computed (so a real 0 survives)
+    var eatingScore: Int?            // 0–100 eating score (cached); nil = not enough data to compute
+    var checkIn = DayCheckIn()       // optional self-report that sharpens Readiness
     var status: String = "normal"    // normal | sick | travel | rest (protected days)
 
     var id: String { date }
@@ -96,6 +100,7 @@ struct Entry: Codable, Equatable, Identifiable {
         proteinG = (try? c.decode(String.self, forKey: .proteinG)) ?? ""
         ai = try? c.decodeIfPresent(AIResult.self, forKey: .ai)
         logged = (try? c.decode([LoggedItem].self, forKey: .logged)) ?? []
+        foodEntries = (try? c.decode([FoodEntry].self, forKey: .foodEntries)) ?? []
         photos = (try? c.decode([String].self, forKey: .photos)) ?? []
         prayers = (try? c.decode(PrayerLog.self, forKey: .prayers)) ?? PrayerLog()
         weightFromHealth = (try? c.decode(Bool.self, forKey: .weightFromHealth)) ?? false
@@ -109,6 +114,9 @@ struct Entry: Codable, Equatable, Identifiable {
         sleep = try? c.decodeIfPresent(SleepBreakdown.self, forKey: .sleep)
         readiness = (try? c.decode(Int.self, forKey: .readiness)) ?? 0
         sleepScore = (try? c.decode(Int.self, forKey: .sleepScore)) ?? 0
+        activeScore = try? c.decodeIfPresent(Int.self, forKey: .activeScore)
+        eatingScore = try? c.decodeIfPresent(Int.self, forKey: .eatingScore)
+        checkIn = (try? c.decode(DayCheckIn.self, forKey: .checkIn)) ?? DayCheckIn()
         status = (try? c.decode(String.self, forKey: .status)) ?? "normal"
         // Migrate legacy non-negotiables into the new manual-habit state.
         if habitState.isEmpty {
@@ -123,26 +131,181 @@ struct Entry: Codable, Equatable, Identifiable {
         if meals.hasAny { return true }
         if nn.anyTrue { return true }
         if status != "normal" { return true }
-        if !logged.isEmpty || !photos.isEmpty || prayers.anyTrue || waterMl > 0 || !workouts.isEmpty { return true }
+        if !logged.isEmpty || !foodEntries.isEmpty || !photos.isEmpty || prayers.anyTrue || waterMl > 0 || !workouts.isEmpty { return true }
         return [training, run, weight, steps, sms, calories, proteinG]
             .contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
     }
 }
 
-struct PrayerLog: Codable, Equatable {
-    var fajr = false, dhuhr = false, asr = false, maghrib = false, isha = false
-    var anyTrue: Bool { fajr || dhuhr || asr || maghrib || isha }
-    var count: Int { [fajr, dhuhr, asr, maghrib, isha].filter { $0 }.count }
-    func isOn(_ name: String) -> Bool {
-        switch name {
-        case "fajr": return fajr
-        case "dhuhr": return dhuhr
-        case "asr": return asr
-        case "maghrib": return maghrib
-        case "isha": return isha
-        default: return false
+/// How a marked prayer relates to its Shari window (see PrayerClassifier + docs/plans/2026-07-improvement-plan.md §4.3).
+enum PrayerBand: String, Codable, CaseIterable, Equatable {
+    case promptOnTime, onTime, lateValid, qadha, unknown, notLogged
+    /// Points out of 10 for the day's prayer ring.
+    var points: Int {
+        switch self {
+        case .promptOnTime: return 10
+        case .onTime: return 8
+        case .lateValid, .unknown: return 5
+        case .qadha: return 2
+        case .notLogged: return 0
         }
     }
+    var label: String {
+        switch self {
+        case .promptOnTime: return "Prompt"
+        case .onTime: return "On time"
+        case .lateValid: return "Later"
+        case .qadha: return "Qadha"
+        case .unknown: return "Marked"
+        case .notLogged: return "Not yet"
+        }
+    }
+}
+
+/// One prayer's mark: when it was tapped + how it classified against its window.
+struct PrayerRecord: Codable, Equatable {
+    var markedEpoch: Double = 0   // 0 = not marked
+    var band: PrayerBand = .notLogged
+
+    init(markedEpoch: Double = 0, band: PrayerBand = .notLogged) {
+        self.markedEpoch = markedEpoch; self.band = band
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        markedEpoch = (try? c.decode(Double.self, forKey: .markedEpoch)) ?? 0
+        band = (try? c.decode(PrayerBand.self, forKey: .band)) ?? .notLogged
+    }
+}
+
+/// One day's prayer marks, keyed by name ("fajr"/"dhuhr"/"asr"/"maghrib"/"isha").
+/// Bool-compatible `fajr`/`dhuhr`/… computed properties keep every existing call site
+/// (`d.prayers.fajr.toggle()`, `prayers.isOn(name)`, `prayers.count`) compiling unchanged.
+struct PrayerLog: Codable, Equatable {
+    var records: [String: PrayerRecord] = [:]
+
+    private enum LegacyKeys: String, CodingKey { case records, fajr, dhuhr, asr, maghrib, isha }
+    private static let names = ["fajr", "dhuhr", "asr", "maghrib", "isha"]
+
+    init() {}
+
+    /// Tolerant decode: new `records` dictionary, or migrate the old five top-level bools
+    /// (a legacy `true` becomes a valid-but-untimed mark, never a crash or a wiped record).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: LegacyKeys.self)
+        if let r = try? c.decode([String: PrayerRecord].self, forKey: .records) {
+            records = r
+            return
+        }
+        var migrated: [String: PrayerRecord] = [:]
+        for (name, key) in zip(Self.names, [LegacyKeys.fajr, .dhuhr, .asr, .maghrib, .isha]) {
+            if (try? c.decode(Bool.self, forKey: key)) == true {
+                migrated[name] = PrayerRecord(markedEpoch: 0, band: .unknown)
+            }
+        }
+        records = migrated
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: LegacyKeys.self)
+        try c.encode(records, forKey: .records)
+    }
+
+    func isOn(_ name: String) -> Bool { (records[name]?.band ?? .notLogged) != .notLogged }
+    func band(_ name: String) -> PrayerBand { records[name]?.band ?? .notLogged }
+    func markedDate(_ name: String) -> Date? {
+        guard let e = records[name]?.markedEpoch, e > 0 else { return nil }
+        return Date(timeIntervalSince1970: e)
+    }
+
+    mutating func setOn(_ name: String, _ on: Bool, at epoch: Double = Date().timeIntervalSince1970, band: PrayerBand = .unknown) {
+        records[name] = on ? PrayerRecord(markedEpoch: epoch, band: band) : nil
+    }
+
+    var anyTrue: Bool { Self.names.contains { isOn($0) } }
+    var count: Int { Self.names.filter { isOn($0) }.count }
+
+    var fajr: Bool { get { isOn("fajr") } set { setOn("fajr", newValue) } }
+    var dhuhr: Bool { get { isOn("dhuhr") } set { setOn("dhuhr", newValue) } }
+    var asr: Bool { get { isOn("asr") } set { setOn("asr", newValue) } }
+    var maghrib: Bool { get { isOn("maghrib") } set { setOn("maghrib", newValue) } }
+    var isha: Bool { get { isOn("isha") } set { setOn("isha", newValue) } }
+}
+
+// MARK: - Rings (Today's adjustable ring row + custom rings)
+
+/// What a ring is backed by. Built-ins delegate to their score/log; `.custom` uses `RingMetric`.
+enum RingSource: String, Codable, CaseIterable, Identifiable, Equatable {
+    case sleep, readiness, active, eating, prayer, custom
+    var id: String { rawValue }
+    var defaultTitle: String {
+        switch self {
+        case .sleep: return "Sleep"
+        case .readiness: return "Readiness"
+        case .active: return "Active"
+        case .eating: return "Eating"
+        case .prayer: return "Prayers"
+        case .custom: return "Custom"
+        }
+    }
+}
+
+/// Which local metric a `.custom` ring tracks. `studyGoalPct` doubles as the "tracked focus/work
+/// hours" ring — `Entry.studyHours` is already fed by real completed sessions (`logStudySession`,
+/// including Focus-mode sessions), so a separate metric would just fragment the same data.
+enum RingMetric: String, Codable, CaseIterable, Identifiable, Equatable {
+    case hydrationPct, studyGoalPct, proteinPct, unknown
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .hydrationPct: return "Hydration goal"
+        case .studyGoalPct: return "Study/work/focus hours goal"
+        case .proteinPct: return "Protein target"
+        case .unknown: return "Not configured"
+        }
+    }
+    var isAvailable: Bool { self != .unknown }
+}
+
+/// One entry in the user's ring row. Sources ship in full; the user picks which 3–4 show
+/// (`AppSettings.visibleRingCount`) and can add unlimited custom rings.
+struct RingDef: Codable, Identifiable, Equatable {
+    var id = UUID().uuidString
+    var source: RingSource = .custom
+    var metric: RingMetric = .unknown   // meaningful only when source == .custom
+    var title: String = ""
+    var goal: Double = 100
+    var colorHex: UInt = 0              // 0 = derive from the score band
+    var enabled: Bool = true
+    var order: Int = 0
+
+    var displayTitle: String { title.isEmpty ? (source == .custom ? metric.label : source.defaultTitle) : title }
+
+    init(source: RingSource = .custom, metric: RingMetric = .unknown, title: String = "",
+         goal: Double = 100, colorHex: UInt = 0, enabled: Bool = true, order: Int = 0) {
+        self.source = source; self.metric = metric; self.title = title
+        self.goal = goal; self.colorHex = colorHex; self.enabled = enabled; self.order = order
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        source = (try? c.decode(RingSource.self, forKey: .source)) ?? .custom
+        metric = (try? c.decode(RingMetric.self, forKey: .metric)) ?? .unknown
+        title = (try? c.decode(String.self, forKey: .title)) ?? ""
+        goal = (try? c.decode(Double.self, forKey: .goal)) ?? 100
+        colorHex = (try? c.decode(UInt.self, forKey: .colorHex)) ?? 0
+        enabled = (try? c.decode(Bool.self, forKey: .enabled)) ?? true
+        order = (try? c.decode(Int.self, forKey: .order)) ?? 0
+    }
+
+    /// The default four-ring starter set shown before a user customizes anything. Eating ships
+    /// seeded-but-disabled — it's a full built-in, just not in the default visible four.
+    static let defaults: [RingDef] = [
+        RingDef(source: .sleep, order: 0),
+        RingDef(source: .readiness, order: 1),
+        RingDef(source: .active, order: 2),
+        RingDef(source: .prayer, goal: 10, order: 3),
+        RingDef(source: .eating, enabled: false, order: 4)
+    ]
 }
 
 /// Reference daily values for common nutrients (adult ballpark; some are upper limits).
@@ -189,7 +352,7 @@ enum Pillar: String, Codable, CaseIterable, Identifiable {
     var hex: UInt {
         switch self {
         case .health: return 0xFB1E4B
-        case .spirituality: return 0xC8843E
+        case .spirituality: return 0x3B4A7C
         case .work: return 0x5B43E0
         case .custom: return 0x16A06A
         }
@@ -220,10 +383,15 @@ struct HabitDef: Codable, Identifiable, Equatable {
     var title: String
     var pillar: Pillar = .custom
     var link: HabitLinkType = .manual
-    var prayerName: String = "fajr"   // for .prayer
-    var threshold: Double = 0          // for steps/activeEnergy/studyHours (0 = use global target)
+    var prayerName: String = "fajr"          // legacy single-prayer target; superseded by prayerNames when non-empty
+    var prayerNames: [String] = []           // for .prayer — the SET of prayers this goal requires (auto-closes when all are marked)
+    var threshold: Double = 0                // for steps/activeEnergy/studyHours (0 = use global target)
     var active: Bool = true
     var order: Int = 0
+
+    /// The prayers this goal actually requires — falls back to the legacy single `prayerName`
+    /// for habits saved before multi-prayer goals existed.
+    var effectivePrayerNames: [String] { prayerNames.isEmpty ? [prayerName] : prayerNames }
 }
 
 struct StudySession: Codable, Identifiable, Equatable {
@@ -570,6 +738,7 @@ struct SleepBreakdown: Codable, Equatable {
     var bedEpoch: Double = 0
     var wakeEpoch: Double = 0
     var efficiency: Double = 0     // 0–1 (asleep / in-bed)
+    var latencyMin: Double = 0     // minutes from first in-bed to first asleep
 
     init() {}
     init(from decoder: Decoder) throws {
@@ -583,11 +752,34 @@ struct SleepBreakdown: Codable, Equatable {
         bedEpoch = (try? c.decode(Double.self, forKey: .bedEpoch)) ?? 0
         wakeEpoch = (try? c.decode(Double.self, forKey: .wakeEpoch)) ?? 0
         efficiency = (try? c.decode(Double.self, forKey: .efficiency)) ?? 0
+        latencyMin = (try? c.decode(Double.self, forKey: .latencyMin)) ?? 0
     }
     var asleepHours: Double { asleepMin / 60 }
     var hasStages: Bool { deepMin > 0 || remMin > 0 || coreMin > 0 }
     var bedDate: Date? { bedEpoch > 0 ? Date(timeIntervalSince1970: bedEpoch) : nil }
     var wakeDate: Date? { wakeEpoch > 0 ? Date(timeIntervalSince1970: wakeEpoch) : nil }
+    var midSleepEpoch: Double { (bedEpoch > 0 && wakeEpoch > bedEpoch) ? bedEpoch + (wakeEpoch - bedEpoch) / 2 : 0 }
+}
+
+/// Optional daily self-report that sharpens the Readiness score (bounded — never overrides sensor data).
+struct DayCheckIn: Codable, Equatable {
+    var soreness: Int = 0    // 0–3
+    var stress: Int = 0      // 0–3
+    var mood: Int = 0        // 0–3
+    var alcohol: Int = 0     // 0–3 (drinks, roughly)
+    var lateCaffeine: Bool = false
+    var illness: Bool = false
+
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        soreness = (try? c.decode(Int.self, forKey: .soreness)) ?? 0
+        stress = (try? c.decode(Int.self, forKey: .stress)) ?? 0
+        mood = (try? c.decode(Int.self, forKey: .mood)) ?? 0
+        alcohol = (try? c.decode(Int.self, forKey: .alcohol)) ?? 0
+        lateCaffeine = (try? c.decode(Bool.self, forKey: .lateCaffeine)) ?? false
+        illness = (try? c.decode(Bool.self, forKey: .illness)) ?? false
+    }
 }
 
 /// A single contributor to the readiness score, for an explainable breakdown.
@@ -637,6 +829,78 @@ struct BackupBundle: Codable {
     var photos: [String: String] = [:]   // filename → base64 JPEG
 }
 
+// MARK: - Structured food log (A1)
+
+/// Where a food's numbers came from — drives trust + whether the LLM was consulted.
+enum FoodSource: String, Codable, CaseIterable, Equatable {
+    case user       // the user's own library (highest trust)
+    case curated    // bundled curated starter DB
+    case usda       // USDA FoodData Central (public domain)
+    case off        // Open Food Facts (ODbL — kept out of exports)
+    case llm        // AI guess (last resort)
+    case manual     // hand-entered calories
+    var label: String {
+        switch self {
+        case .user: return "Your library"
+        case .curated, .usda: return "Food database"
+        case .off: return "Open Food Facts"
+        case .llm: return "AI estimate"
+        case .manual: return "Manual"
+        }
+    }
+    var trusted: Bool { self == .user || self == .curated || self == .usda || self == .manual }
+}
+
+/// One structured, editable food line item on a day. Nutrition is stored PER SERVING; `qty`
+/// scales it, so changing quantity recomputes totals live. Replaces free-text meals + the
+/// AI-overwrites-totals flow. `mealKey` is breakfast/lunch/dinner/snacks/drinks.
+struct FoodEntry: Codable, Identifiable, Equatable {
+    var id = UUID().uuidString
+    var mealKey: String = "snacks"
+    var name: String = ""
+    var qty: Double = 1
+    var servingLabel: String = ""       // "1 dosa", "100 g"
+    var kcal: Double = 0                 // per serving
+    var protein: Double = 0
+    var carbs: Double = 0
+    var fat: Double = 0
+    var fiber: Double = 0
+    var sodium: Double = 0               // mg per serving
+    var micros: [Micro] = []
+    var source: FoodSource = .manual
+
+    var totalKcal: Double { kcal * qty }
+    var totalProtein: Double { protein * qty }
+    var totalCarbs: Double { carbs * qty }
+    var totalFat: Double { fat * qty }
+    var totalFiber: Double { fiber * qty }
+    var totalSodium: Double { sodium * qty }
+
+    init(id: String = UUID().uuidString, mealKey: String = "snacks", name: String = "", qty: Double = 1,
+         servingLabel: String = "", kcal: Double = 0, protein: Double = 0, carbs: Double = 0,
+         fat: Double = 0, fiber: Double = 0, sodium: Double = 0, micros: [Micro] = [], source: FoodSource = .manual) {
+        self.id = id; self.mealKey = mealKey; self.name = name; self.qty = qty; self.servingLabel = servingLabel
+        self.kcal = kcal; self.protein = protein; self.carbs = carbs; self.fat = fat; self.fiber = fiber
+        self.sodium = sodium; self.micros = micros; self.source = source
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        mealKey = (try? c.decode(String.self, forKey: .mealKey)) ?? "snacks"
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        qty = (try? c.decode(Double.self, forKey: .qty)) ?? 1
+        servingLabel = (try? c.decode(String.self, forKey: .servingLabel)) ?? ""
+        kcal = (try? c.decode(Double.self, forKey: .kcal)) ?? 0
+        protein = (try? c.decode(Double.self, forKey: .protein)) ?? 0
+        carbs = (try? c.decode(Double.self, forKey: .carbs)) ?? 0
+        fat = (try? c.decode(Double.self, forKey: .fat)) ?? 0
+        fiber = (try? c.decode(Double.self, forKey: .fiber)) ?? 0
+        sodium = (try? c.decode(Double.self, forKey: .sodium)) ?? 0
+        micros = (try? c.decode([Micro].self, forKey: .micros)) ?? []
+        source = (try? c.decode(FoodSource.self, forKey: .source)) ?? .manual
+    }
+}
+
 // MARK: - Catalog (known supplements & foods) + quick-logged items
 
 enum CatalogKind: String, Codable, CaseIterable {
@@ -675,13 +939,17 @@ struct CatalogItem: Codable, Equatable, Identifiable {
     var fat: Double = 0
     var fiber: Double = 0
     var micros: [Micro] = []          // vitamins, minerals, etc.
+    var mealTags: [String] = []       // meal keys this is typically logged at (breakfast/lunch/dinner/snacks/drinks); empty = any time
+    var favorite: Bool = false
+    var lastUsedEpoch: Double = 0
+    var useCount: Int = 0
 
     init(id: String = UUID().uuidString, kind: CatalogKind, name: String, serving: String = "",
          calories: Double = 0, protein: Double = 0, carbs: Double = 0, fat: Double = 0,
-         fiber: Double = 0, micros: [Micro] = []) {
+         fiber: Double = 0, micros: [Micro] = [], mealTags: [String] = [], favorite: Bool = false) {
         self.id = id; self.kind = kind; self.name = name; self.serving = serving
         self.calories = calories; self.protein = protein; self.carbs = carbs; self.fat = fat
-        self.fiber = fiber; self.micros = micros
+        self.fiber = fiber; self.micros = micros; self.mealTags = mealTags; self.favorite = favorite
     }
 
     init(from decoder: Decoder) throws {
@@ -696,6 +964,10 @@ struct CatalogItem: Codable, Equatable, Identifiable {
         fat = (try? c.decode(Double.self, forKey: .fat)) ?? 0
         fiber = (try? c.decode(Double.self, forKey: .fiber)) ?? 0
         micros = (try? c.decode([Micro].self, forKey: .micros)) ?? []
+        mealTags = (try? c.decode([String].self, forKey: .mealTags)) ?? []
+        favorite = (try? c.decode(Bool.self, forKey: .favorite)) ?? false
+        lastUsedEpoch = (try? c.decode(Double.self, forKey: .lastUsedEpoch)) ?? 0
+        useCount = (try? c.decode(Int.self, forKey: .useCount)) ?? 0
     }
 }
 
@@ -748,6 +1020,7 @@ struct AppData: Codable {
     var sessions: [ScheduledSession] = []
     var occasions: [Occasion] = []
     var healthNotes: [HealthNote] = []
+    var rings: [RingDef] = []
 
     init() {}
 
@@ -765,6 +1038,7 @@ struct AppData: Codable {
         sessions = (try? c.decode([ScheduledSession].self, forKey: .sessions)) ?? []
         occasions = (try? c.decode([Occasion].self, forKey: .occasions)) ?? []
         healthNotes = (try? c.decode([HealthNote].self, forKey: .healthNotes)) ?? []
+        rings = (try? c.decode([RingDef].self, forKey: .rings)) ?? []
     }
 }
 
@@ -821,6 +1095,7 @@ struct AppSettings: Codable, Equatable {
     var hkWrite = HKWriteFlags()
     var calendarSync = false
     var remindersSync = false
+    var visibleRingCount = 4        // 3 or 4 — how many rings show in the Today ring row
 
     init() {}
 
@@ -835,6 +1110,8 @@ struct AppSettings: Codable, Equatable {
         hkWrite = (try? c.decode(HKWriteFlags.self, forKey: .hkWrite)) ?? HKWriteFlags()
         calendarSync = (try? c.decode(Bool.self, forKey: .calendarSync)) ?? false
         remindersSync = (try? c.decode(Bool.self, forKey: .remindersSync)) ?? false
+        let ringCount = (try? c.decode(Int.self, forKey: .visibleRingCount)) ?? 4
+        visibleRingCount = min(4, max(3, ringCount))
     }
 }
 
@@ -861,6 +1138,12 @@ struct Targets: Codable, Equatable {
     var examDateEpoch: Double = 0
     var workMode: String = "study"          // "study" or "work"
 
+    // Eating-score profile (Mifflin–St Jeor BMR/TDEE inputs)
+    var ageYears: Double = 30
+    var heightCm: Double = 170
+    var sexMale: Bool = true
+    var goal: String = "maintain"           // "maintain" | "cut" | "bulk"
+
     // The personal "prize" metric shown on Trends (defaults to visceral fat).
     var prizeName: String = "Visceral fat"
     var prizeUnit: String = ""
@@ -884,6 +1167,10 @@ struct Targets: Codable, Equatable {
         examName = (try? c.decode(String.self, forKey: .examName)) ?? ""
         examDateEpoch = (try? c.decode(Double.self, forKey: .examDateEpoch)) ?? 0
         workMode = (try? c.decode(String.self, forKey: .workMode)) ?? "study"
+        ageYears = (try? c.decode(Double.self, forKey: .ageYears)) ?? 30
+        heightCm = (try? c.decode(Double.self, forKey: .heightCm)) ?? 170
+        sexMale = (try? c.decode(Bool.self, forKey: .sexMale)) ?? true
+        goal = (try? c.decode(String.self, forKey: .goal)) ?? "maintain"
         prizeName = (try? c.decode(String.self, forKey: .prizeName)) ?? "Visceral fat"
         prizeUnit = (try? c.decode(String.self, forKey: .prizeUnit)) ?? ""
         prizeStart = (try? c.decode(Double.self, forKey: .prizeStart))
@@ -911,10 +1198,10 @@ struct ModulePrefs: Codable, Equatable {
     var weather = true
     var order: [String] = ModulePrefs.defaultOrder
 
-    /// Canonical order; "habits" and "score" are core (always shown, but movable).
-    static let defaultOrder = ["coach", "weather", "prayer", "fasting", "sleep", "health", "meals", "hydration",
+    /// Canonical order; "rings"/"habits"/"score" are core (always shown, but movable).
+    static let defaultOrder = ["rings", "coach", "weather", "prayer", "fasting", "sleep", "health", "meals", "hydration",
                                "quickLog", "habits", "score", "workStudy", "training", "photos"]
-    static let coreKeys: Set<String> = ["habits", "score"]
+    static let coreKeys: Set<String> = ["rings", "habits", "score"]
 
     init() {}
     init(from decoder: Decoder) throws {
@@ -937,6 +1224,7 @@ struct ModulePrefs: Codable, Equatable {
 
     func label(_ key: String) -> String {
         switch key {
+        case "rings": return "Rings"
         case "coach": return "AI coach"
         case "weather": return "Weather"
         case "prayer": return "Prayer times"
@@ -1041,6 +1329,29 @@ struct ChatMessage: Codable, Identifiable, Equatable {
         id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
         role = (try? c.decode(String.self, forKey: .role)) ?? "assistant"
         text = (try? c.decode(String.self, forKey: .text)) ?? ""
+    }
+}
+
+/// One coach conversation. Multiple threads let the user keep separate chats (e.g. "This week"
+/// vs "Meal ideas") instead of one ever-growing transcript.
+struct CoachThread: Codable, Identifiable, Equatable {
+    var id = UUID().uuidString
+    var title: String = "New chat"
+    var messages: [ChatMessage] = []
+    var createdEpoch: Double = 0
+    var updatedEpoch: Double = 0
+
+    init() {
+        let now = Date().timeIntervalSince1970
+        createdEpoch = now; updatedEpoch = now
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        title = (try? c.decode(String.self, forKey: .title)) ?? "New chat"
+        messages = (try? c.decode([ChatMessage].self, forKey: .messages)) ?? []
+        createdEpoch = (try? c.decode(Double.self, forKey: .createdEpoch)) ?? 0
+        updatedEpoch = (try? c.decode(Double.self, forKey: .updatedEpoch)) ?? createdEpoch
     }
 }
 

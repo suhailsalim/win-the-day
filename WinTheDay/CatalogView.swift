@@ -6,6 +6,7 @@ struct CatalogView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var editing: CatalogItem?
     @State private var startKind: CatalogKind = .supplement
+    @State private var searchText = ""
 
     var body: some View {
         NavigationStack {
@@ -22,6 +23,7 @@ struct CatalogView: View {
                 }
                 .scrollIndicators(.hidden)
             }
+            .searchable(text: $searchText, prompt: "Search your library")
             .navigationTitle("Library")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -37,7 +39,8 @@ struct CatalogView: View {
     }
 
     private func section(_ kind: CatalogKind) -> some View {
-        let items = store.items(of: kind)
+        let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        let items = store.items(of: kind).filter { query.isEmpty || $0.name.lowercased().contains(query) }
         return VStack(spacing: 0) {
             HStack {
                 SectionHeader(text: kind.title)
@@ -53,9 +56,10 @@ struct CatalogView: View {
             }
 
             if items.isEmpty {
-                Text(kind == .supplement
-                     ? "Add your whey, creatine, magnesium… once, then tick them off daily."
-                     : "Add foods you eat often — log them with one tap from Today.")
+                Text(!query.isEmpty ? "No matches for \u{201C}\(searchText)\u{201D}."
+                     : (kind == .supplement
+                        ? "Add your whey, creatine, magnesium… once, then tick them off daily."
+                        : "Add foods you eat often — log them with one tap from Today."))
                     .font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16).padding(.vertical, 14)
@@ -118,6 +122,8 @@ struct ItemEditor: View {
                         autofillCard
                         SectionHeader(text: "Details")
                         detailsCard
+                        SectionHeader(text: "Quick-add")
+                        quickAddCard
                         SectionHeader(text: "Vitamins & minerals")
                         microsCard
                         if !errorMsg.isEmpty {
@@ -189,7 +195,7 @@ struct ItemEditor: View {
                 .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                 .frame(maxWidth: .infinity).padding(.vertical, 11)
                 .background(RoundedRectangle(cornerRadius: 13)
-                    .fill(LinearGradient(colors: [Color(hex: 0xECB477), Color(hex: 0xE29A4E)], startPoint: .top, endPoint: .bottom)))
+                    .fill(LinearGradient(colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)], startPoint: .top, endPoint: .bottom)))
             }
             .buttonStyle(.plain)
             .disabled(parsing || nlText.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -230,6 +236,38 @@ struct ItemEditor: View {
             Hairline()
             numRow("Fiber (g)", value: $item.fiber)
         }
+        .glassList()
+    }
+
+    private static let mealChips: [(key: String, label: String)] = [
+        ("breakfast", "Breakfast"), ("snacks", "Snacks"), ("lunch", "Lunch"), ("dinner", "Dinner"), ("drinks", "Drinks")
+    ]
+
+    /// Which meal(s) surface this item as a quick-add chip, plus a favorite flag — this is what
+    /// keeps Today's quick-log short instead of dumping the whole library as chips.
+    private var quickAddCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Always suggest").font(.system(size: 14)).foregroundStyle(Theme.ink)
+                Spacer()
+                ToggleRow(on: item.favorite) { item.favorite.toggle() }
+            }
+            Text("Leave all off to show it whenever it's used often, or pick specific meals so it only shows then.")
+                .font(.system(size: 11.5)).foregroundStyle(Theme.tertiaryInk)
+            FlowLayout(spacing: 8) {
+                ForEach(Self.mealChips, id: \.key) { chip in
+                    let on = item.mealTags.contains(chip.key)
+                    Button {
+                        if on { item.mealTags.removeAll { $0 == chip.key } } else { item.mealTags.append(chip.key) }
+                    } label: {
+                        Text(chip.label).font(.system(size: 13, weight: .medium)).foregroundStyle(on ? .white : Theme.ink)
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(Capsule().fill(on ? AnyShapeStyle(Theme.sage) : AnyShapeStyle(Color.white.opacity(0.55))))
+                    }.buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(16)
         .glassList()
     }
 

@@ -27,6 +27,7 @@ final class HealthManager: ObservableObject {
     private let activeEnergyType = HKQuantityType(.activeEnergyBurned)
     private let restingHRType = HKQuantityType(.restingHeartRate)
     private let hrvType = HKQuantityType(.heartRateVariabilitySDNN)
+    private let respiratoryRateType = HKQuantityType(.respiratoryRate)
     private let sleepType = HKCategoryType(.sleepAnalysis)
     // Body composition (InBody)
     private let bodyFatType = HKQuantityType(.bodyFatPercentage)
@@ -44,7 +45,7 @@ final class HealthManager: ObservableObject {
             return
         }
         let read: Set<HKObjectType> = [
-            stepType, weightType, activeEnergyType, restingHRType, hrvType, sleepType,
+            stepType, weightType, activeEnergyType, restingHRType, hrvType, respiratoryRateType, sleepType,
             energyType, proteinType, bodyFatType, leanMassType, bmiType, HKObjectType.workoutType()
         ]
         var write: Set<HKSampleType> = [
@@ -56,6 +57,7 @@ final class HealthManager: ObservableObject {
             try await store.requestAuthorization(toShare: write, read: read)
             authorized = true
             await refresh()
+            await backfill()   // warm HRV/RHR/respiratory baselines from existing history so Readiness/Active calibrate on day one
         } catch {
             loadPlaceholders()
         }
@@ -222,6 +224,7 @@ final class HealthManager: ObservableObject {
                 func mins(_ s: HKCategorySample) -> Double { s.endDate.timeIntervalSince(s.startDate) / 60 }
                 var firstAsleep: Date?
                 var lastAsleep: Date?
+                var firstInBed: Date?
                 for s in cats {
                     switch s.value {
                     case HKCategoryValueSleepAnalysis.asleepDeep.rawValue:
@@ -236,6 +239,7 @@ final class HealthManager: ObservableObject {
                         b.awakeMin += mins(s)
                     case HKCategoryValueSleepAnalysis.inBed.rawValue:
                         b.inBedMin += mins(s)
+                        if firstInBed == nil { firstInBed = s.startDate }
                     default: break
                     }
                     let asleep = s.value != HKCategoryValueSleepAnalysis.awake.rawValue
@@ -249,6 +253,9 @@ final class HealthManager: ObservableObject {
                 b.bedEpoch = firstAsleep?.timeIntervalSince1970 ?? 0
                 b.wakeEpoch = lastAsleep?.timeIntervalSince1970 ?? 0
                 b.efficiency = b.inBedMin > 0 ? min(1, b.asleepMin / b.inBedMin) : 0
+                if let firstInBed, let firstAsleep, firstAsleep > firstInBed {
+                    b.latencyMin = firstAsleep.timeIntervalSince(firstInBed) / 60
+                }
                 cont.resume(returning: b.asleepMin > 0 ? b : nil)
             }
             store.execute(q)
@@ -287,6 +294,96 @@ final class HealthManager: ObservableObject {
     }
     func hrvBaseline() async -> Double? { await fetchAverage(hrvType, unit: .secondUnit(with: .milli), days: 30) }
     func rhrBaseline() async -> Double? { await fetchAverage(restingHRType, unit: HKUnit.count().unitDivided(by: .minute()), days: 30) }
+    func respRateBaseline() async -> Double? { await fetchAverage(respiratoryRateType, unit: HKUnit.count().unitDivided(by: .minute()), days: 30) }
+
+    func fetchRespiratoryRate(asOf day: Date = Date()) async -> Double? {
+        await fetchLatest(before: day, respiratoryRateType, unit: HKUnit.count().unitDivided(by: .minute()))
+    }
+
+    /// Median HRV (SDNN) over the same night window used for sleep detail — Apple's HRV samples are
+    /// sparse spot-checks, so a single "latest" reading is noisy; the overnight median is more stable.
+    func fetchHRVOvernightMedian(nightEnding day: Date = Date()) async -> Double? {
+        await fetchMedian(hrvType, unit: .secondUnit(with: .milli), nightEnding: day)
+    }
+
+    /// Median respiratory rate over the same night window.
+    func fetchRespiratoryRateOvernightMedian(nightEnding day: Date = Date()) async -> Double? {
+        await fetchMedian(respiratoryRateType, unit: HKUnit.count().unitDivided(by: .minute()), nightEnding: day)
+    }
+
+    /// Daily discrete-average history for a quantity, oldest→newest, days without samples dropped.
+    private func fetchDailyAverageHistory(_ type: HKQuantityType, unit: HKUnit, days: Int) async -> [Double] {
+        let cal = Calendar.current
+        let end = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date())) ?? Date()
+        guard let start = cal.date(byAdding: .day, value: -days, to: cal.startOfDay(for: Date())) else { return [] }
+        return await withCheckedContinuation { cont in
+            let interval = DateComponents(day: 1)
+            let q = HKStatisticsCollectionQuery(quantityType: type, quantitySamplePredicate: nil,
+                                                options: .discreteAverage, anchorDate: cal.startOfDay(for: start),
+                                                intervalComponents: interval)
+            q.initialResultsHandler = { _, collection, _ in
+                var out: [Double] = []
+                collection?.enumerateStatistics(from: start, to: end) { stat, _ in
+                    if let v = stat.averageQuantity()?.doubleValue(for: unit) { out.append(v) }
+                }
+                cont.resume(returning: out)
+            }
+            store.execute(q)
+        }
+    }
+
+    private func meanSD(_ values: [Double], ln: Bool = false) -> (mean: Double, sd: Double)? {
+        let xs = ln ? values.filter { $0 > 0 }.map { log($0) } : values
+        guard xs.count >= 2 else { return nil }
+        let mean = xs.reduce(0, +) / Double(xs.count)
+        let variance = xs.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(xs.count)
+        return (mean, sqrt(variance))
+    }
+
+    /// 30-day baseline (mean, sd) of ln(HRV) — HRV is right-skewed, so scores compare against the
+    /// log-normal distribution rather than raw ms.
+    func hrvBaselineStats(days: Int = 30) async -> (mean: Double, sd: Double)? {
+        meanSD(await fetchDailyAverageHistory(hrvType, unit: .secondUnit(with: .milli), days: days), ln: true)
+    }
+    func rhrBaselineStats(days: Int = 30) async -> (mean: Double, sd: Double)? {
+        meanSD(await fetchDailyAverageHistory(restingHRType, unit: HKUnit.count().unitDivided(by: .minute()), days: days))
+    }
+    func respBaselineStats(days: Int = 30) async -> (mean: Double, sd: Double)? {
+        meanSD(await fetchDailyAverageHistory(respiratoryRateType, unit: HKUnit.count().unitDivided(by: .minute()), days: days))
+    }
+    /// Number of nights with an HRV reading in the last `days` — gates score availability (need ≥7).
+    func hrvSampleNights(days: Int = 30) async -> Int {
+        (await fetchDailyAverageHistory(hrvType, unit: .secondUnit(with: .milli), days: days)).count
+    }
+
+    /// Backfills the last 30 days of sleep/HRV/RHR/respiratory/active-energy so baselines are usable
+    /// on first launch instead of waiting a week — a no-op beyond warming HealthKit's cache since
+    /// ScoreEngine recomputes baselines from live queries each time.
+    func backfill() async {
+        guard available else { return }
+        _ = await hrvBaselineStats()
+        _ = await rhrBaselineStats()
+        _ = await respBaselineStats()
+    }
+
+    private func fetchMedian(_ type: HKQuantityType, unit: HKUnit, nightEnding day: Date) async -> Double? {
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: day)
+        let start = cal.date(byAdding: .hour, value: -6, to: dayStart) ?? dayStart
+        let end = min(Date(), cal.date(byAdding: .hour, value: 12, to: dayStart) ?? day)
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+        let values: [Double] = await withCheckedContinuation { cont in
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+                let vals = (samples as? [HKQuantitySample] ?? []).map { $0.quantity.doubleValue(for: unit) }
+                cont.resume(returning: vals)
+            }
+            store.execute(q)
+        }
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        let mid = sorted.count / 2
+        return sorted.count % 2 == 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+    }
 
     private func fetchWorkoutsThisWeek() async -> Int {
         let cal = Calendar.current

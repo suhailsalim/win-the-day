@@ -19,8 +19,16 @@ struct TodayView: View {
     @State private var editWorkout: Workout?
     @State private var editingTimeKey: MealKey?
     @State private var photoItem: PhotosPickerItem?
+    @State private var showRingEditor = false
+    @State private var ringDetail: RingDef?
+    @State private var showAllQuickLog = false
+    @State private var exportedText: ExportedText?
+    @State private var showFocus = false
+    @State private var showFoodAdd = false
+    @State private var foodAddMeal = "breakfast"
 
     private struct MealKey: Identifiable { let id: String }
+    private struct ExportedText: Identifiable { let id = UUID(); let text: String }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,10 +49,17 @@ struct TodayView: View {
         .sheet(isPresented: $showQibla) { QiblaView() }
         .sheet(isPresented: $showHabits) { HabitsEditorView() }
         .sheet(isPresented: $showStudy) { StudyManageView() }
-        .sheet(isPresented: $showChat) { CoachChatView() }
+        .sheet(isPresented: $showChat) { CoachChatListView() }
         .sheet(isPresented: $showWorkout) { WorkoutView() }
         .sheet(item: $editWorkout) { w in WorkoutView(editing: w) }
         .sheet(item: $editingTimeKey) { mk in mealTimeSheet(mk.id) }
+        .sheet(isPresented: $showRingEditor) { RingEditorView() }
+        .sheet(item: $ringDetail) { ring in
+            RingDetailView(ring: ring, result: store.ringResult(ring, prayerTimes: prayer.today, nextFajr: prayer.nextFajr))
+        }
+        .sheet(item: $exportedText) { ShareSheet(items: [$0.text]) }
+        .sheet(isPresented: $showFoodAdd) { FoodAddSheet(mealKey: foodAddMeal) }
+        .fullScreenCover(isPresented: $showFocus) { FocusScreenView() }
         .task { await store.refreshSuggestion() }
         .task { prayer.start() }
         .task { weather.start(); store.weatherContext = weather.plannerSummary }
@@ -171,6 +186,7 @@ struct TodayView: View {
     @ViewBuilder private func moduleView(_ key: String) -> some View {
         if store.modules.enabled(key) {
             switch key {
+            case "rings": ringsModule
             case "coach": coachCard
             case "weather": weatherModule
             case "prayer": prayerCard
@@ -190,61 +206,187 @@ struct TodayView: View {
         }
     }
 
+    // MARK: - Rings (adjustable Whoop-style ring row)
+
+    @ViewBuilder private var ringsModule: some View {
+        HStack {
+            SectionHeader(text: "Rings", color: store.moduleColor("rings"))
+            Spacer()
+            Button { showRingEditor = true } label: {
+                Image(systemName: "slider.horizontal.3").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
+            }.padding(.top, 14)
+        }
+        HStack(spacing: 4) {
+            ForEach(store.visibleRings) { ring in
+                let result = store.ringResult(ring, prayerTimes: prayer.today, nextFajr: prayer.nextFajr)
+                Button { ringDetail = ring } label: {
+                    VStack(spacing: 6) {
+                        RingGaugeView(fraction: result.fraction, value: result.displayValue, label: ring.displayTitle,
+                                     color: ringColor(ring, result), available: result.available)
+                        Text(result.caption).font(.system(size: 10)).foregroundStyle(Theme.tertiaryInk).lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 10)
+        .glassList(cornerRadius: 20)
+        .padding(.top, 14)
+    }
+
+    private func ringColor(_ def: RingDef, _ r: RingResult) -> Color {
+        if def.colorHex != 0 { return Color(hex: def.colorHex) }
+        switch r.band {
+        case .low: return Color(hex: 0xD86B4A)
+        case .mid: return Theme.accentDark
+        case .high: return Theme.sage
+        }
+    }
+
     @ViewBuilder private var mealsModule: some View {
         HStack {
             SectionHeader(text: "What you ate", color: store.moduleColor("meals"))
             Spacer()
-            if store.isToday && !store.draft.meals.hasAny && store.hasPriorMeals {
-                Button { store.repeatPreviousMeals() } label: {
-                    Label("Repeat last day", systemImage: "arrow.counterclockwise")
-                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
+            if store.draft.isMeaningful {
+                Button { exportedText = ExportedText(text: store.exportDayText(store.draft.date)) } label: {
+                    Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
                 }
-                .padding(.trailing, 8).padding(.top, 22)
+                .padding(.top, 22)
             }
         }
-        mealNudgeBanner
-        mealsCard
-        aiResult
-        totals
+        foodLogCard
+        foodTotalsBar
     }
+
+    private var mealBuckets: [MealBucket] {
+        // Meals that have entries, plus the time-of-day nudge meal, in canonical order.
+        let withEntries = Set(store.draft.foodEntries.map { $0.mealKey })
+        let nudge = store.mealNudge?.key
+        return MealBucket.allCases.filter { withEntries.contains($0.rawValue) || $0.rawValue == nudge }
+    }
+
+    @ViewBuilder private var foodLogCard: some View {
+        if store.draft.foodEntries.isEmpty && mealBuckets.isEmpty {
+            Button { foodAddMeal = store.mealNudge?.key ?? "breakfast"; showFoodAdd = true } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accentDark)
+                    Text("Add what you ate — search a food, scan, or describe your meal.")
+                        .font(.system(size: 13.5)).foregroundStyle(Theme.secondaryInk).multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 14).frame(maxWidth: .infinity).glassList()
+            }.buttonStyle(.plain).padding(.top, 4)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(Array(mealBuckets.enumerated()), id: \.element.id) { idx, bucket in
+                    let entries = store.foodEntries(bucket.rawValue)
+                    HStack(spacing: 7) {
+                        Image(systemName: bucket.icon).font(.system(size: 12)).foregroundStyle(Theme.accentDark)
+                        Text(bucket.label).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink)
+                        if store.isToday && store.mealNudge?.key == bucket.rawValue {
+                            Text("now").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                                .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(Theme.accentDark))
+                        }
+                        Spacer()
+                        if entries.isEmpty {
+                            Text("\(Int(entries.reduce(0) { $0 + $1.totalKcal })) kcal").opacity(0)
+                        } else {
+                            Text("\(Int(entries.reduce(0) { $0 + $1.totalKcal })) kcal")
+                                .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.tertiaryInk)
+                        }
+                        Button { foodAddMeal = bucket.rawValue; showFoodAdd = true } label: {
+                            Image(systemName: "plus").font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.accentDark)
+                        }.buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 14).padding(.top, idx == 0 ? 12 : 14).padding(.bottom, 4)
+                    ForEach(entries) { e in
+                        FoodEntryRow(entry: e)
+                        if e.id != entries.last?.id { Hairline().padding(.leading, 14) }
+                    }
+                    if entries.isEmpty {
+                        Text("Nothing yet — tap + to add.").font(.system(size: 12.5)).foregroundStyle(Theme.tertiaryInk)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14).padding(.bottom, 8)
+                    }
+                    if idx < mealBuckets.count - 1 { Hairline() }
+                }
+            }
+            .padding(.bottom, 6)
+            .glassList()
+            .padding(.top, 4)
+
+            Button { foodAddMeal = store.mealNudge?.key ?? "snacks"; showFoodAdd = true } label: {
+                Label("Add food", systemImage: "plus").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                    .frame(maxWidth: .infinity).padding(.vertical, 11).glassList()
+            }.buttonStyle(.plain).padding(.top, 8)
+        }
+    }
+
+    private var foodTotalsBar: some View {
+        let t = store.foodTotals
+        let eating = store.eatingScoreResult(for: store.draft)
+        return HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(Int((Double(store.draft.calories) ?? t.kcal))) kcal")
+                    .font(Theme.display(20)).foregroundStyle(Theme.ink)
+                Text("\(Int((Double(store.draft.proteinG) ?? t.protein)))g protein · \(Int(t.carbs))C \(Int(t.fat))F")
+                    .font(.system(size: 12)).foregroundStyle(Theme.secondaryInk)
+            }
+            Spacer()
+            if eating.available {
+                VStack(spacing: 1) {
+                    Text("\(eating.score)").font(Theme.display(20)).foregroundStyle(eatingColor(eating.score))
+                    Text("eating").font(.system(size: 10)).foregroundStyle(Theme.tertiaryInk)
+                }
+            }
+        }
+        .padding(14).glassList().padding(.top, 10)
+    }
+    private func eatingColor(_ s: Int) -> Color { s >= 70 ? Theme.sage : (s >= 45 ? Theme.accentDark : Color(hex: 0xD86B4A)) }
 
     @ViewBuilder private var hydrationModule: some View {
         SectionHeader(text: "Hydration", color: store.moduleColor("hydration"))
         hydrationSection
     }
 
-    // MARK: - Weather
+    // MARK: - Weather (compact tile) + AI tips rotator
+
+    /// A fixed narrow width, not a `layoutPriority` hint (which only governs compression order,
+    /// not a proportional split) — this is what actually gets a reliable ¼-ish tile every time.
+    private static let weatherTileWidth: CGFloat = 92
 
     @ViewBuilder private var weatherModule: some View {
-        if store.isToday, let n = weather.now {
-            let cond = WeatherManager.condition(n.code)
-            let advice = weather.outdoorAdvice()
-            GlassCard(padding: 14, cornerRadius: 20, tint: Color(hex: 0x2E8AE0).opacity(0.10)) {
-                HStack(spacing: 13) {
-                    Image(systemName: cond.symbol)
-                        .font(.system(size: 30)).foregroundStyle(Color(hex: 0x2E8AE0))
-                        .frame(width: 44)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text("\(Int(n.tempC))°").font(.system(size: 20, weight: .bold)).foregroundStyle(Theme.ink)
-                            Text(cond.label).font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
-                            if !weather.place.isEmpty {
-                                Text("· \(weather.place)").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
-                            }
-                        }
-                        HStack(spacing: 5) {
-                            Image(systemName: advice.ok ? "figure.walk" : "house.fill")
-                                .font(.system(size: 11)).foregroundStyle(advice.ok ? Theme.sage : Color(hex: 0xD86B4A))
-                            Text(advice.headline).font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(advice.ok ? Theme.sage : Color(hex: 0xD86B4A))
-                        }
-                        Text(advice.detail).font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                }
+        if store.isToday, weather.now != nil {
+            HStack(alignment: .top, spacing: 10) {
+                weatherMiniTile
+                tipsRotator.frame(maxWidth: .infinity)
             }
             .padding(.top, 14)
+            .task { await store.refreshDayTips() }
+        }
+    }
+
+    @ViewBuilder private var weatherMiniTile: some View {
+        if let n = weather.now {
+            let cond = WeatherManager.condition(n.code)
+            let advice = weather.outdoorAdvice()
+            GlassCard(padding: 10, cornerRadius: 20, tint: Color(hex: 0x2E8AE0).opacity(0.10)) {
+                VStack(spacing: 3) {
+                    Image(systemName: cond.symbol).font(.system(size: 22)).foregroundStyle(Color(hex: 0x2E8AE0))
+                    Text("\(Int(n.tempC))\u{00b0}").font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.ink)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    Text(advice.ok ? "Go out" : "Indoors")
+                        .font(.system(size: 10, weight: .medium)).lineLimit(1)
+                        .foregroundStyle(advice.ok ? Theme.sage : Color(hex: 0xD86B4A))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .frame(width: Self.weatherTileWidth)
+        }
+    }
+
+    private var tipsRotator: some View {
+        TipsRotatorView(tips: store.dayTips, loading: store.dayTipsLoading) {
+            await store.refreshDayTips(force: true)
         }
     }
 
@@ -254,15 +396,19 @@ struct TodayView: View {
         if let s = store.draft.sleep, store.draft.readiness > 0 {
             SectionHeader(text: "Sleep & readiness", color: store.moduleColor("sleep"))
             GlassCard(padding: 16) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 16) {
-                        readinessRing(store.draft.readiness)
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 14) {
+                        RingGaugeView(fraction: Double(store.draft.sleepScore) / 100, value: "\(store.draft.sleepScore)",
+                                     label: "sleep", color: bandColor(store.draft.sleepScore), size: 62)
+                        RingGaugeView(fraction: Double(store.draft.readiness) / 100, value: "\(store.draft.readiness)",
+                                     label: "ready", color: bandColor(store.draft.readiness), size: 62)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(readinessWord(store.draft.readiness)).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
-                            Text(String(format: "%.1fh asleep · sleep score %d", s.asleepHours, store.draft.sleepScore))
+                            Text(String(format: "%.1fh asleep", s.asleepHours))
                                 .font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
                             if let bed = s.bedDate, let wake = s.wakeDate {
-                                Text("\(clockStr(bed)) → \(clockStr(wake))").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                                Text("\(clockStr(bed)) → \(clockStr(wake))" + (s.latencyMin > 0 ? " · \(Int(s.latencyMin))m to fall asleep" : ""))
+                                    .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
                             }
                         }
                         Spacer()
@@ -286,25 +432,49 @@ struct TodayView: View {
                             }
                         }
                     }
+                    let trend = store.recentScores(days: 14).readiness
+                    if trend.count >= 2 {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Readiness · 14 days").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.tertiaryInk)
+                            LineChartView(values: trend, color: Theme.accentDark, target: 70)
+                                .frame(height: 70)
+                        }
+                        .padding(.top, 2)
+                    }
+                    if let plan = store.sleepPlanTonight { tonightPlanCard(plan) }
                 }
             }
             .padding(.top, 14)
         }
     }
 
-    private func readinessRing(_ score: Int) -> some View {
-        ZStack {
-            Circle().stroke(Color(white: 0.5).opacity(0.15), lineWidth: 7)
-            Circle().trim(from: 0, to: CGFloat(score) / 100)
-                .stroke(score >= 70 ? Theme.sage : (score >= 45 ? Theme.accentDark : Color(hex: 0xD86B4A)),
-                        style: StrokeStyle(lineWidth: 7, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            VStack(spacing: 0) {
-                Text("\(score)").font(Theme.serif(24)).foregroundStyle(Theme.ink)
-                Text("ready").font(.system(size: 9)).foregroundStyle(Theme.tertiaryInk)
+    private func bandColor(_ score: Int) -> Color {
+        score >= 70 ? Theme.sage : (score >= 45 ? Theme.accentDark : Color(hex: 0xD86B4A))
+    }
+
+    @ViewBuilder private func tonightPlanCard(_ plan: SleepPlanner.Plan) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Hairline().padding(.vertical, 2)
+            HStack(spacing: 6) {
+                Image(systemName: "moon.zzz.fill").font(.system(size: 12)).foregroundStyle(Theme.accentDark)
+                Text("Tonight's plan").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink)
+            }
+            Text(String(format: "Aim for %.1fh — bedtime around %@", plan.needHours, clockStr(Date(timeIntervalSince1970: plan.recommendedBedEpoch))))
+                .font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
+            let cutoffStr = clockStr(Date(timeIntervalSince1970: plan.dinnerCutoffEpoch))
+            if let dinnerEpoch = store.draft.mealTimes["dinner"], dinnerEpoch > 0 {
+                let ok = dinnerEpoch <= plan.dinnerCutoffEpoch
+                HStack(spacing: 5) {
+                    Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(.system(size: 11)).foregroundStyle(ok ? Theme.sage : Color(hex: 0xD86B4A))
+                    Text(ok ? "Dinner timing looks good for that bedtime." : "Dinner was after \(cutoffStr) — may push sleep later.")
+                        .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                }
+            } else {
+                Text("Eat dinner by \(cutoffStr) for that bedtime.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
             }
         }
-        .frame(width: 66, height: 66)
     }
 
     private func sleepStageBars(_ s: SleepBreakdown) -> some View {
@@ -355,9 +525,9 @@ struct TodayView: View {
         TimelineView(.periodic(from: .now, by: 30)) { ctx in
             let now = ctx.date
             let inWindow = isFastingWindow(now)
-            GlassCard(padding: 16, cornerRadius: 20, tint: Color(hex: 0xC8843E).opacity(0.12)) {
+            GlassCard(padding: 16, cornerRadius: 20, tint: Color(hex: 0x3B4A7C).opacity(0.12)) {
                 HStack(spacing: 13) {
-                    IconTile(symbol: "moon.stars.fill", colors: [Color(hex: 0xE6A765), Color(hex: 0xC8632E)], size: 36, corner: 11)
+                    IconTile(symbol: "moon.stars.fill", colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)], size: 36, corner: 11)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(inWindow ? "Iftar in \(countdown(to: prayer.iftar, from: now))"
                                       : "Suhoor ends in \(countdown(to: prayer.suhoorEnd, from: now))")
@@ -374,11 +544,20 @@ struct TodayView: View {
         }
     }
 
-    private var fastingTimerCard: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-            let now = ctx.date
-            let elapsed = fasting.elapsedHours(now: now)
-            let progress = fasting.progress(now: now)
+    // Only drive the per-second timeline while actually fasting; otherwise the periodic timer
+    // ticked 86,400×/day re-laying out the whole card even when there was nothing counting.
+    @ViewBuilder private var fastingTimerCard: some View {
+        if fasting.isFasting {
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in fastingCardBody(now: ctx.date) }
+        } else {
+            fastingCardBody(now: Date())
+        }
+    }
+
+    private func fastingCardBody(now: Date) -> some View {
+        let elapsed = fasting.elapsedHours(now: now)
+        let progress = fasting.progress(now: now)
+        return Group {
             GlassCard(padding: 16) {
                 VStack(spacing: 12) {
                     HStack {
@@ -467,7 +646,7 @@ struct TodayView: View {
                     Button { editWorkout = w } label: {
                         HStack(spacing: 11) {
                             IconTile(symbol: Workout.symbol(w.kind),
-                                     colors: [Theme.accent, Color(hex: 0xC8632E)], size: 30, corner: 9)
+                                     colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 30, corner: 9)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(w.title.isEmpty ? Workout.label(w.kind) : w.title)
                                     .font(.system(size: 15.5, weight: .medium)).foregroundStyle(Theme.ink)
@@ -597,10 +776,12 @@ struct TodayView: View {
                     ForEach(times.ordered.filter { $0.0.isPrayer }, id: \.0) { name, date in
                         let isNext = next?.0 == name
                         let prayed = store.isPrayed(name)
-                        Button { store.togglePrayer(name) } label: {
+                        let band = store.prayerBand(name)
+                        Button { store.togglePrayer(name, times: times, nextFajr: prayer.nextFajr) } label: {
                             VStack(spacing: 4) {
                                 Text(name.label).font(.system(size: 11)).foregroundStyle(Theme.secondaryInk)
-                                Text(timeStr(date)).font(.system(size: 12.5, weight: .semibold))
+                                Text(prayed ? band.label : timeStr(date))
+                                    .font(.system(size: 12.5, weight: .semibold))
                                     .foregroundStyle(prayed ? .white : (isNext ? Theme.accentDark : Theme.ink))
                                 Image(systemName: prayed ? "checkmark.circle.fill" : "circle")
                                     .font(.system(size: 13))
@@ -636,7 +817,7 @@ struct TodayView: View {
     @ViewBuilder private var coachCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 11) {
-                IconTile(symbol: "sparkles", colors: [Theme.accent, Color(hex: 0xC8632E)], size: 32, corner: 10)
+                IconTile(symbol: "sparkles", colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 32, corner: 10)
                 if store.suggestionLoading && store.suggestion.isEmpty {
                     Text("Thinking about your day…")
                         .font(.system(size: 14)).foregroundStyle(Theme.secondaryInk)
@@ -693,9 +874,9 @@ struct TodayView: View {
             .padding(.trailing, 8).padding(.top, 22)
         }
 
-        let supps = store.items(of: .supplement)
-        let foods = store.items(of: .food)
-        if supps.isEmpty && foods.isEmpty {
+        let allSupps = store.items(of: .supplement)
+        let allFoods = store.items(of: .food)
+        if allSupps.isEmpty && allFoods.isEmpty {
             Button { showCatalog = true } label: {
                 HStack(spacing: 9) {
                     Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accentDark)
@@ -710,9 +891,25 @@ struct TodayView: View {
             }
             .buttonStyle(.plain)
         } else {
+            let mealKey = store.mealNudge?.key
+            let suggestedSupps = store.suggestedQuickAddItems(of: .supplement, mealKey: mealKey)
+            let suggestedFoods = store.suggestedQuickAddItems(of: .food, mealKey: mealKey)
+            let loggedElsewhere = (allSupps + allFoods).filter { store.loggedQty($0.id) > 0 }
+                .filter { !suggestedSupps.contains($0) && !suggestedFoods.contains($0) }
             VStack(spacing: 10) {
-                if !supps.isEmpty { chipGroup(title: "Supplements", items: supps) }
-                if !foods.isEmpty { chipGroup(title: "Foods", items: foods) }
+                if !suggestedSupps.isEmpty { chipGroup(title: "Supplements", items: suggestedSupps) }
+                if !suggestedFoods.isEmpty { chipGroup(title: "Foods · now", items: suggestedFoods) }
+                if !loggedElsewhere.isEmpty { chipGroup(title: "Also logged today", items: loggedElsewhere) }
+                if showAllQuickLog {
+                    if !allSupps.isEmpty { chipGroup(title: "All supplements", items: allSupps) }
+                    if !allFoods.isEmpty { chipGroup(title: "All foods", items: allFoods) }
+                }
+                Button { showAllQuickLog.toggle() } label: {
+                    Text(showAllQuickLog ? "Show less" : "Show whole library")
+                        .font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.tertiaryInk)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         microsSummary
@@ -910,7 +1107,7 @@ struct TodayView: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(LinearGradient(colors: [Color(hex: 0xECB477), Color(hex: 0xE29A4E)],
+                            .fill(LinearGradient(colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)],
                                                  startPoint: .top, endPoint: .bottom))
                     )
                     .opacity(store.aiStatus == .loading ? 0.7 : 1)
@@ -920,6 +1117,16 @@ struct TodayView: View {
             .padding(.horizontal, 16).padding(.vertical, 13)
         }
         .glassList()
+    }
+
+    private func aiMealCalorieBinding(_ index: Int) -> Binding<String> {
+        Binding(
+            get: {
+                guard let meals = store.draft.ai?.meals, meals.indices.contains(index),
+                      let v = meals[index].calories, v > 0 else { return "" }
+                return String(Int(v.rounded()))
+            },
+            set: { store.updateAIMealCalories(at: index, calories: Double($0) ?? 0) })
     }
 
     private var estimateLabel: String {
@@ -936,12 +1143,12 @@ struct TodayView: View {
             VStack(spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(store.aiModelLine)
-                        .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color(hex: 0xB7752E))
+                        .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color(hex: 0x3B4A7C))
                     Spacer()
                     Text("±10–15%").font(.system(size: 11.5)).foregroundStyle(Theme.tertiaryInk)
                 }
                 .padding(.bottom, 11)
-                ForEach(ai.meals) { r in
+                ForEach(Array(ai.meals.enumerated()), id: \.element.id) { idx, r in
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(r.label).font(.system(size: 14)).foregroundStyle(Theme.ink)
@@ -951,8 +1158,13 @@ struct TodayView: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 1) {
-                            Text("\(Int((r.calories ?? 0).rounded())) kcal")
-                                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                            HStack(spacing: 2) {
+                                TextField("0", text: aiMealCalorieBinding(idx))
+                                    .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                                    .frame(width: 50)
+                                Text("kcal").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                            }
                             Text("P\(Int((r.protein ?? 0).rounded())) · C\(Int((r.carbs ?? 0).rounded())) · F\(Int((r.fat ?? 0).rounded()))")
                                 .font(.system(size: 11.5)).foregroundStyle(Theme.tertiaryInk)
                         }
@@ -960,11 +1172,14 @@ struct TodayView: View {
                     .padding(.vertical, 7)
                     Hairline()
                 }
+                Text("Tap a calorie value to correct it — the whole-day total recalculates.")
+                    .font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 2)
                 HStack {
                     Text("Whole day").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
                     Spacer()
                     Text("\(Int((ai.total.calories ?? 0).rounded())) kcal · \(Int((ai.total.protein ?? 0).rounded()))g protein")
-                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0xB7752E))
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0x3B4A7C))
                 }
                 .padding(.top, 10)
                 Text("Auto-filled your totals. Estimates are approximate.")
@@ -1121,6 +1336,9 @@ struct TodayView: View {
             HStack {
                 SectionHeader(text: vocab.pillar, color: store.moduleColor("workStudy"))
                 Spacer()
+                Button { showFocus = true } label: {
+                    Label("Focus", systemImage: "scope").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                }.padding(.trailing, 8).padding(.top, 22)
                 Button { showStudy = true } label: {
                     Text("Manage").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
                 }.padding(.trailing, 8).padding(.top, 22)
