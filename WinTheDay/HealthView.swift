@@ -190,7 +190,7 @@ struct HealthView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 13, style: .continuous)
                         .fill(filled
-                              ? AnyShapeStyle(LinearGradient(colors: [Color(hex: 0xECB477), Color(hex: 0xE29A4E)],
+                              ? AnyShapeStyle(LinearGradient(colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)],
                                                              startPoint: .top, endPoint: .bottom))
                               : AnyShapeStyle(Theme.accent.opacity(0.16)))
                 )

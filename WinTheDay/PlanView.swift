@@ -170,7 +170,7 @@ struct PlanView: View {
 
     private func planRow(symbol: String, title: String, detail: String) -> some View {
         HStack(spacing: 11) {
-            IconTile(symbol: symbol, colors: [Theme.accent, Color(hex: 0xC8632E)], size: 28, corner: 8)
+            IconTile(symbol: symbol, colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 28, corner: 8)
             Text(title).font(.system(size: 15)).foregroundStyle(Theme.ink)
             Spacer()
             Text(detail).font(.system(size: 12.5)).foregroundStyle(Theme.tertiaryInk)
@@ -208,7 +208,7 @@ struct PlanView: View {
                             }.buttonStyle(.plain)
                             Button { editSession = s } label: {
                                 HStack(spacing: 11) {
-                                    IconTile(symbol: ScheduledSession.symbol(s.kind), colors: [Theme.accent, Color(hex: 0xC8632E)], size: 28, corner: 8)
+                                    IconTile(symbol: ScheduledSession.symbol(s.kind), colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 28, corner: 8)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(s.title.isEmpty ? ScheduledSession.label(s.kind) : s.title).font(.system(size: 15)).foregroundStyle(Theme.ink)
                                         Text("\(AppStore.shortDate(s.date)) \(timeStr(s.date))\(s.withPT ? " · PT" : "")").font(.system(size: 12.5)).foregroundStyle(Theme.tertiaryInk)
@@ -258,7 +258,7 @@ struct PlanView: View {
                     ForEach(Array(occ.prefix(8).enumerated()), id: \.element.id) { idx, o in
                         Button { editOccasion = o } label: {
                             HStack(spacing: 11) {
-                                IconTile(symbol: Occasion.symbol(o.type), colors: [Theme.accent, Color(hex: 0xC8632E)], size: 28, corner: 8)
+                                IconTile(symbol: Occasion.symbol(o.type), colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 28, corner: 8)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(o.title).font(.system(size: 15)).foregroundStyle(Theme.ink)
                                     if !o.checklist.isEmpty {

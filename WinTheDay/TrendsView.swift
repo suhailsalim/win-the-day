@@ -14,6 +14,7 @@ struct TrendsView: View {
                 prize
                 statGrid
                 readinessCard
+                eatingCard
                 microsCard
                 trainingCard
                 rangePicker
@@ -205,6 +206,44 @@ struct TrendsView: View {
         if series.count >= 2 {
             ChartCard(title: "Readiness", sub: "last \(series.count) days") {
                 LineChartView(values: series, color: Color(hex: 0x6E7BFF), target: 70)
+            }
+            .padding(.top, 12)
+        }
+    }
+
+    @ViewBuilder private var eatingCard: some View {
+        let bal = store.weeklyEnergyBalance()
+        if bal.daysScored > 0 {
+            GlassCard(padding: 16) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Eating · this week").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                        Spacer()
+                        if let avg = bal.avgEatingScore {
+                            Text("avg score \(Int(avg.rounded()))").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                        }
+                    }
+                    let sign = bal.projectedKg >= 0 ? "+" : ""
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text("\(sign)\(String(format: "%.2f", bal.projectedKg)) kg").font(Theme.serif(28))
+                            .foregroundStyle(bal.projectedKg > 0 ? Color(hex: 0xD86B4A) : Theme.sage)
+                        Text("projected this week").font(.system(size: 12.5)).foregroundStyle(Theme.secondaryInk)
+                    }
+                    Text("From \(Int(bal.netKcalWeek)) kcal net balance over \(bal.daysScored) logged day\(bal.daysScored == 1 ? "" : "s") vs. your activity-adjusted TDEE (Mifflin–St Jeor + active energy).")
+                        .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if bal.aggressive {
+                        HStack(spacing: 5) {
+                            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11)).foregroundStyle(Color(hex: 0xD86B4A))
+                            Text("This rate looks aggressive — a sudden jump can also be water, especially after a high-sodium day, not fat.")
+                                .font(.system(size: 12)).foregroundStyle(Color(hex: 0xD86B4A))
+                        }
+                    }
+                    if store.targets.heightCm == 170 && store.targets.ageYears == 30 {
+                        Text("Set your age/height/sex in Settings → Eating score profile for an accurate TDEE.")
+                            .font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk)
+                    }
+                }
             }
             .padding(.top, 12)
         }

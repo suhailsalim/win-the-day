@@ -21,6 +21,7 @@ struct CalcMethod: Equatable {
 @MainActor
 final class PrayerManager: NSObject, ObservableObject {
     @Published var today: PrayerTimes?
+    @Published var nextFajr: Date?     // tomorrow's Fajr — bounds Isha's classification window (PrayerClassifier)
     @Published var placeName: String = ""
     @Published var enabled: Bool
     @Published var method: CalcMethod
@@ -139,6 +140,10 @@ final class PrayerManager: NSObject, ObservableObject {
         today = PrayerTimes.calculate(date: Date(), latitude: coord.latitude, longitude: coord.longitude,
                                       timeZone: tz, fajrAngle: m.fajrAngle, ishaAngle: m.ishaAngle,
                                       asrFactor: factor)
+        let tomorrowDate = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        nextFajr = PrayerTimes.calculate(date: tomorrowDate, latitude: coord.latitude, longitude: coord.longitude,
+                                         timeZone: tz, fajrAngle: m.fajrAngle, ishaAngle: m.ishaAngle,
+                                         asrFactor: factor)[.fajr]
         if enabled { scheduleNotifications(coord: coord, asrFactor: factor, tz: tz) }
         if ramadanMode { scheduleRamadanNotifications(coord: coord, asrFactor: factor, tz: tz) }
         maybeStartLiveActivity()

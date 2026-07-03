@@ -92,11 +92,27 @@ struct HabitDetailView: View {
                             }
                             if habit.link == .prayer {
                                 Hairline()
-                                pickerRow("Prayer") {
-                                    Picker("", selection: $habit.prayerName) {
-                                        ForEach(prayerNames, id: \.self) { Text($0.capitalized).tag($0) }
-                                    }.labelsHidden().tint(Theme.accentDark)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text("Prayers required")
+                                        .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.secondaryInk)
+                                        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
+                                    Text("This goal auto-closes once every prayer below is marked.")
+                                        .font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk)
+                                        .padding(.horizontal, 16).padding(.bottom, 8)
+                                    ForEach(prayerNames, id: \.self) { p in
+                                        Button { toggleRequiredPrayer(p) } label: {
+                                            HStack {
+                                                Text(p.capitalized).foregroundStyle(Theme.ink)
+                                                Spacer()
+                                                Image(systemName: habit.prayerNames.contains(p) ? "checkmark.circle.fill" : "circle")
+                                                    .foregroundStyle(habit.prayerNames.contains(p) ? Theme.accentDark : Color(white: 0.27).opacity(0.3))
+                                            }
+                                            .font(.system(size: 16)).padding(.horizontal, 16).padding(.vertical, 10)
+                                        }.buttonStyle(.plain)
+                                        if p != prayerNames.last { Hairline() }
+                                    }
                                 }
+                                .onAppear { if habit.prayerNames.isEmpty { habit.prayerNames = [habit.prayerName] } }
                             }
                             if habit.link == .steps || habit.link == .activeEnergy || habit.link == .studyHours {
                                 Hairline()
@@ -139,6 +155,15 @@ struct HabitDetailView: View {
             }
         }
         .tint(Theme.accentDark)
+    }
+
+    private func toggleRequiredPrayer(_ p: String) {
+        if habit.prayerNames.contains(p) {
+            guard habit.prayerNames.count > 1 else { return }   // a goal must require at least one prayer
+            habit.prayerNames.removeAll { $0 == p }
+        } else {
+            habit.prayerNames.append(p)
+        }
     }
 
     private var thresholdLabel: String {

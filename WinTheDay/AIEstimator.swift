@@ -68,6 +68,30 @@ struct AIEstimator {
         return (title, items)
     }
 
+    /// Split a free-text meal ("2 dosa and a coffee") into structured, per-serving food items.
+    /// This is the LAST tier of the food lookup chain — AppStore first resolves each returned name
+    /// against the offline library/DB and only keeps these LLM numbers for items nothing else knew.
+    func parseFoodItems(text: String, settings: AppSettings) async throws -> [FoodEntry] {
+        let prompt = """
+        Split this meal description into individual food items with per-serving nutrition. These are
+        everyday Kerala / South Indian home portions — estimate realistically.
+        Meal: "\(text)"
+
+        Respond with ONLY this JSON, no prose or markdown:
+        {"items":[{"name":"Dosa","qty":2,"serving":"1 dosa","kcal":133,"protein":2.7,"carbs":24,"fat":3,"fiber":1.2,"sodium":240}]}
+        qty = number of servings (whole or decimal). Whole numbers for kcal/sodium. Include only real items.
+        """
+        let out = try await complete(prompt: prompt, imageBase64: nil, settings: settings, jsonOnly: true)
+        guard let obj = Self.parseObject(out), let raw = obj["items"] as? [[String: Any]] else { throw AIError.badResponse }
+        return raw.compactMap { d in
+            guard let name = d["name"] as? String, !name.isEmpty else { return nil }
+            let qty = num(d["qty"]);
+            return FoodEntry(name: name, qty: qty > 0 ? qty : 1, servingLabel: (d["serving"] as? String) ?? "",
+                             kcal: num(d["kcal"]), protein: num(d["protein"]), carbs: num(d["carbs"]),
+                             fat: num(d["fat"]), fiber: num(d["fiber"]), sodium: num(d["sodium"]), source: .llm)
+        }
+    }
+
     /// Parse a nutrition label (photo) and/or free text into a catalog item.
     func parseItem(kind: CatalogKind, text: String?, imageBase64: String?,
                    settings: AppSettings) async throws -> CatalogItem {
@@ -199,11 +223,247 @@ struct AIEstimator {
         return out
     }
 
+    // MARK: - Tool-calling coach chat
+
+    /// Multi-turn chat where the model can call read-only tools (`CoachToolRegistry`) instead of
+    /// having the user's whole data dump pre-stuffed into the prompt. Supports Anthropic, the
+    /// OpenAI-compatible family (OpenAI/OpenRouter/DeepSeek/Ollama Cloud/Ollama) and Gemini natively;
+    /// Apple Intelligence and any transport failure (unsupported model, malformed tool response, …)
+    /// fall back to the legacy flattened-context `chat()` so the coach never surfaces a raw error.
+    @MainActor
+    func chatWithTools(system: String, history: [ChatMessage], tools: [CoachTool],
+                       store: AppStore, settings: AppSettings) async throws -> String {
+        let apiModel = Providers.apiModelID(provider: settings.provider, model: settings.model, custom: settings.customModel)
+        do {
+            switch settings.provider {
+            case "anthropic":
+                return try await anthropicToolChat(system: system, history: history, tools: tools, store: store, model: apiModel)
+            case "openai", "openrouter", "deepseek", "ollamacloud", "ollama":
+                return try await openAICompatToolChat(provider: settings.provider, system: system, history: history,
+                                                      tools: tools, store: store, model: apiModel, settings: settings)
+            case "gemini":
+                return try await geminiToolChat(system: system, history: history, tools: tools, store: store, model: apiModel)
+            default:
+                return try await chat(system: system, history: history, settings: settings)
+            }
+        } catch {
+            return try await chat(system: system, history: history, settings: settings)
+        }
+    }
+
+    private static let maxToolIterations = 6
+
+    // MARK: Anthropic tool loop
+
+    private func anthropicSend(system: String, messages: [[String: Any]], tools: [[String: Any]]?,
+                               key: String, model: String) async throws -> [String: Any] {
+        var body: [String: Any] = ["model": model, "max_tokens": 1024, "system": system, "messages": messages]
+        if let tools { body["tools"] = tools }
+        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(key, forHTTPHeaderField: "x-api-key")
+        req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let data = try await send(req)
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw AIError.badResponse }
+        return obj
+    }
+
+    @MainActor
+    private func anthropicToolChat(system: String, history: [ChatMessage], tools: [CoachTool],
+                                   store: AppStore, model: String) async throws -> String {
+        let key = Keychain.get("anthropic")
+        guard !key.isEmpty else { throw AIError.noKey }
+        var messages: [[String: Any]] = history.map { ["role": $0.isUser ? "user" : "assistant", "content": $0.text] }
+        let toolSchemas: [[String: Any]] = tools.map { t in
+            ["name": t.name, "description": t.description,
+             "input_schema": ["type": "object", "properties": t.parameters, "required": t.required]]
+        }
+
+        for _ in 0..<Self.maxToolIterations {
+            let obj = try await anthropicSend(system: system, messages: messages, tools: toolSchemas, key: key, model: model)
+            guard let content = obj["content"] as? [[String: Any]] else { throw AIError.badResponse }
+            let toolUses = content.filter { ($0["type"] as? String) == "tool_use" }
+            if (obj["stop_reason"] as? String) == "tool_use", !toolUses.isEmpty {
+                messages.append(["role": "assistant", "content": content])
+                let resultBlocks: [[String: Any]] = toolUses.compactMap { tu in
+                    guard let id = tu["id"] as? String, let name = tu["name"] as? String else { return nil }
+                    let input = (tu["input"] as? [String: Any]) ?? [:]
+                    let result = tools.first { $0.name == name }?.run(store, input) ?? "Unknown tool."
+                    return ["type": "tool_result", "tool_use_id": id, "content": result]
+                }
+                messages.append(["role": "user", "content": resultBlocks])
+                continue
+            }
+            if let text = content.first(where: { ($0["type"] as? String) == "text" })?["text"] as? String, !text.isEmpty {
+                return text
+            }
+            break
+        }
+        // Iteration cap hit — force a final answer with no tools so the coach never returns empty.
+        let obj = try await anthropicSend(system: system, messages: messages, tools: nil, key: key, model: model)
+        guard let content = obj["content"] as? [[String: Any]],
+              let text = content.first(where: { ($0["type"] as? String) == "text" })?["text"] as? String, !text.isEmpty
+        else { throw AIError.badResponse }
+        return text
+    }
+
+    // MARK: OpenAI-compatible tool loop (OpenAI, OpenRouter, DeepSeek, Ollama Cloud, Ollama)
+
+    private func openAICompatToolSend(base: String, keyName: String?, model: String, messages: [[String: Any]],
+                                      tools: [[String: Any]]?, extraHeaders: [String: String]) async throws -> [String: Any] {
+        guard let url = URL(string: base + "/chat/completions") else { throw AIError.unsupported }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 120
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let keyName {
+            let key = Keychain.get(keyName)
+            guard !key.isEmpty else { throw AIError.noKey }
+            req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        }
+        for (h, v) in extraHeaders { req.setValue(v, forHTTPHeaderField: h) }
+        var body: [String: Any] = ["model": model, "messages": messages]
+        if let tools { body["tools"] = tools }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let data = try await send(req)
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw AIError.badResponse }
+        return obj
+    }
+
+    @MainActor
+    private func openAICompatToolChat(provider: String, system: String, history: [ChatMessage], tools: [CoachTool],
+                                      store: AppStore, model: String, settings: AppSettings) async throws -> String {
+        let base: String, keyName: String?, extraHeaders: [String: String]
+        switch provider {
+        case "openai": (base, keyName, extraHeaders) = ("https://api.openai.com/v1", "openai", [:])
+        case "deepseek": (base, keyName, extraHeaders) = ("https://api.deepseek.com/v1", "deepseek", [:])
+        case "ollamacloud": (base, keyName, extraHeaders) = ("https://ollama.com/v1", "ollamacloud", [:])
+        case "openrouter": (base, keyName, extraHeaders) = ("https://openrouter.ai/api/v1", "openrouter",
+                                                             ["HTTP-Referer": "https://wintheday.app", "X-Title": "Win the Day"])
+        case "ollama":
+            let host = settings.ollamaHost.trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            guard !host.isEmpty else { throw AIError.noKey }
+            (base, keyName, extraHeaders) = (host + "/v1", nil, [:])
+        default: throw AIError.unsupported
+        }
+
+        var messages: [[String: Any]] = [["role": "system", "content": system]]
+        messages += history.map { ["role": $0.isUser ? "user" : "assistant", "content": $0.text] }
+        let toolSchemas: [[String: Any]] = tools.map { t in
+            ["type": "function", "function": ["name": t.name, "description": t.description,
+                                              "parameters": ["type": "object", "properties": t.parameters, "required": t.required]]]
+        }
+
+        for _ in 0..<Self.maxToolIterations {
+            let obj = try await openAICompatToolSend(base: base, keyName: keyName, model: model, messages: messages,
+                                                      tools: toolSchemas, extraHeaders: extraHeaders)
+            guard let choices = obj["choices"] as? [[String: Any]],
+                  let msg = choices.first?["message"] as? [String: Any] else { throw AIError.badResponse }
+            if let toolCalls = msg["tool_calls"] as? [[String: Any]], !toolCalls.isEmpty {
+                messages.append(msg)
+                for tc in toolCalls {
+                    guard let id = tc["id"] as? String, let fn = tc["function"] as? [String: Any],
+                          let name = fn["name"] as? String else { continue }
+                    let argsStr = (fn["arguments"] as? String) ?? "{}"
+                    let args = (try? JSONSerialization.jsonObject(with: Data(argsStr.utf8)) as? [String: Any]) ?? [:]
+                    let result = tools.first { $0.name == name }?.run(store, args) ?? "Unknown tool."
+                    messages.append(["role": "tool", "tool_call_id": id, "content": result])
+                }
+                continue
+            }
+            if let text = msg["content"] as? String, !text.isEmpty { return text }
+            break
+        }
+        let obj = try await openAICompatToolSend(base: base, keyName: keyName, model: model, messages: messages,
+                                                  tools: nil, extraHeaders: extraHeaders)
+        guard let choices = obj["choices"] as? [[String: Any]], let msg = choices.first?["message"] as? [String: Any],
+              let text = msg["content"] as? String, !text.isEmpty else { throw AIError.badResponse }
+        return text
+    }
+
+    // MARK: Gemini tool loop
+
+    private func geminiToolSend(model: String, key: String, contents: [[String: Any]],
+                                tools: [[String: Any]]?) async throws -> [String: Any] {
+        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(key)")!
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["contents": contents]
+        if let tools { body["tools"] = tools }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let data = try await send(req)
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw AIError.badResponse }
+        return obj
+    }
+
+    @MainActor
+    private func geminiToolChat(system: String, history: [ChatMessage], tools: [CoachTool],
+                                store: AppStore, model: String) async throws -> String {
+        let key = Keychain.get("gemini")
+        guard !key.isEmpty else { throw AIError.noKey }
+        var contents: [[String: Any]] = [["role": "user", "parts": [["text": system]]],
+                                         ["role": "model", "parts": [["text": "Understood."]]]]
+        contents += history.map { ["role": $0.isUser ? "user" : "model", "parts": [["text": $0.text]]] }
+        let toolSchemas: [[String: Any]] = [["functionDeclarations": tools.map { t in
+            ["name": t.name, "description": t.description,
+             "parameters": ["type": "OBJECT", "properties": t.parameters, "required": t.required]]
+        }]]
+
+        for _ in 0..<Self.maxToolIterations {
+            let obj = try await geminiToolSend(model: model, key: key, contents: contents, tools: toolSchemas)
+            guard let candidates = obj["candidates"] as? [[String: Any]],
+                  let content = candidates.first?["content"] as? [String: Any],
+                  let parts = content["parts"] as? [[String: Any]] else { throw AIError.badResponse }
+            let calls = parts.compactMap { $0["functionCall"] as? [String: Any] }
+            if !calls.isEmpty {
+                contents.append(["role": "model", "parts": parts])
+                let responseParts: [[String: Any]] = calls.compactMap { call in
+                    guard let name = call["name"] as? String else { return nil }
+                    let args = (call["args"] as? [String: Any]) ?? [:]
+                    let result = tools.first { $0.name == name }?.run(store, args) ?? "Unknown tool."
+                    return ["functionResponse": ["name": name, "response": ["content": result]]]
+                }
+                contents.append(["role": "user", "parts": responseParts])
+                continue
+            }
+            if let text = parts.first(where: { $0["text"] != nil })?["text"] as? String, !text.isEmpty { return text }
+            break
+        }
+        let obj = try await geminiToolSend(model: model, key: key, contents: contents, tools: nil)
+        guard let candidates = obj["candidates"] as? [[String: Any]],
+              let content = candidates.first?["content"] as? [String: Any],
+              let parts = content["parts"] as? [[String: Any]],
+              let text = parts.first(where: { $0["text"] != nil })?["text"] as? String, !text.isEmpty
+        else { throw AIError.badResponse }
+        return text
+    }
+
     /// A short, time-aware nudge for the home screen.
     func suggest(prompt: String, settings: AppSettings) async throws -> String {
         let text = try await complete(prompt: prompt, imageBase64: nil, settings: settings, jsonOnly: false)
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "\"", with: "")
+    }
+
+    /// A short list of varied tips for the weather module's rotator. Tries strict JSON first,
+    /// then a lenient line/bullet extraction — JSON mode isn't guaranteed on every provider
+    /// (Apple Intelligence, small local models), so this never throws on well-formed prose either.
+    func suggestTips(prompt: String, settings: AppSettings) async throws -> [String] {
+        let text = try await complete(prompt: prompt, imageBase64: nil, settings: settings, jsonOnly: true)
+        if let sliced = Self.sliceJSON(text), let data = sliced.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let raw = obj["tips"] as? [String] {
+            let clean = raw.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            if !clean.isEmpty { return Array(clean.prefix(6)) }
+        }
+        let lenient = text.split(separator: "\n")
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "-•*0123456789.\" \t")) }
+            .filter { $0.count > 8 }
+        return Array(lenient.prefix(6))
     }
 
     private func num(_ v: Any?) -> Double {

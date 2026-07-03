@@ -1,5 +1,13 @@
 import Foundation
 
+/// One ring's rendered state, sized down for the App-Group payload (short strings, no factors).
+struct SnapshotRing: Codable {
+    var title: String = ""
+    var pct: Int = 0          // 0-100
+    var display: String = ""  // short value shown in the ring, e.g. "82" or "7.2"
+    var colorHex: UInt = 0
+}
+
 /// Small payload the app writes to the shared App Group so home-screen widgets can render
 /// without launching the app. Keep it tiny and Codable.
 struct SharedSnapshot: Codable {
@@ -37,7 +45,18 @@ struct SharedSnapshot: Codable {
     // Readiness & sleep
     var readiness: Int = 0
     var sleepScore: Int = 0
+    var activeScore: Int = -1   // -1 = not computed (no active-energy data yet)
+    var eatingScore: Int = -1   // -1 = not computed
+    var projectedWeeklyKg: Double = 0
+    var sleepNeedHours: Double = 0
+    var recommendedBedEpoch: Double = 0
     var dayStatus: String = "normal"
+
+    // Ring row (size-budgeted: ≤4 rings, short strings) + one rotating tip — for a future
+    // ring-strip widget. Not yet rendered by PrayerWidgetExt; the data is published so that
+    // pass doesn't need any App-Group/model changes when it lands.
+    var rings: [SnapshotRing] = []
+    var topTip: String = ""
 
     // Weather
     var weatherTempC: Double = 0

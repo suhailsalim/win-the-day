@@ -5,6 +5,9 @@ struct CoachChatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var input = ""
     @FocusState private var inputFocused: Bool
+    /// True when pushed from `CoachChatListView` — leaves the automatic back button in place
+    /// instead of a "Done" button, and shows the thread title.
+    var showsChatsButton = false
 
     private let starters = [
         "How\u{2019}s my week going?",
@@ -22,11 +25,13 @@ struct CoachChatView: View {
                     inputBar
                 }
             }
-            .navigationTitle("Coach")
+            .navigationTitle(store.activeThread?.title ?? "Coach")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }.foregroundStyle(Theme.accentDark)
+                if !showsChatsButton {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Done") { dismiss() }.foregroundStyle(Theme.accentDark)
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if !store.chatMessages.isEmpty {
@@ -70,7 +75,7 @@ struct CoachChatView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 11) {
-                IconTile(symbol: "sparkles", colors: [Theme.accent, Color(hex: 0xC8632E)], size: 34, corner: 11)
+                IconTile(symbol: "sparkles", colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 34, corner: 11)
                 Text("Ask me anything about your day, your week, meals, training or study. I can see your logs.")
                     .font(.system(size: 14.5)).foregroundStyle(Theme.ink)
                     .fixedSize(horizontal: false, vertical: true)

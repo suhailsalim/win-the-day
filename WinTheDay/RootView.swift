@@ -23,6 +23,12 @@ struct RootView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
                 .padding(.bottom, 110)
+                // Pin the content to exactly the scroll viewport's width. A vertical ScrollView
+                // otherwise lets a single child that refuses the proposed width (a fixed frame, a
+                // Chart, etc.) make the whole content wider than the screen — which is what allowed
+                // the entire page (and tab bar) to pan/rubber-band sideways. Clamping here means any
+                // stray over-wide subview is clipped instead of becoming horizontally scrollable.
+                .containerRelativeFrame(.horizontal)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
@@ -119,6 +125,6 @@ struct TabBar: View {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.7), lineWidth: 0.5)
         )
-        .shadow(color: Color(hex: 0x50371E).opacity(0.18), radius: 17, x: 0, y: 10)
+        .shadow(color: Color(hex: 0x2A3350).opacity(0.18), radius: 17, x: 0, y: 10)
     }
 }

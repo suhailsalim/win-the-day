@@ -15,21 +15,22 @@ struct WaterBottleView: View {
             bottle.fill(Color.white.opacity(0.45))
             bottle.stroke(Color.white.opacity(0.8), lineWidth: 1.5)
 
-            // water
-            TimelineView(.animation) { timeline in
-                let t = timeline.date.timeIntervalSinceReferenceDate
-                GeometryReader { geo in
-                    let h = geo.size.height
-                    let fillHeight = h * clamped
-                    ZStack(alignment: .bottom) {
-                        Wave(phase: t.truncatingRemainder(dividingBy: 2) / 2 * .pi * 2, amplitude: clamped > 0.02 ? 5 : 0)
-                            .fill(LinearGradient(colors: [Color(hex: 0x6FB7FF), Color(hex: 0x2E8AE0)],
-                                                 startPoint: .top, endPoint: .bottom))
-                            .frame(height: max(0, fillHeight) + 12)
-                            .offset(y: 6)
-                    }
-                    .frame(width: geo.size.width, height: h, alignment: .bottom)
+            // water — a STATIC wavy surface. The previous TimelineView(.animation) redrew this
+            // at the display's full refresh rate (60–120 fps) forever, rebuilding the sine polyline
+            // every frame while the hydration module sat on-screen — the dominant cause of the
+            // app's high idle CPU / "High" energy. The fill height still animates on change via the
+            // container's `.animation(value: clamped)`, so adding water is still lively.
+            GeometryReader { geo in
+                let h = geo.size.height
+                let fillHeight = h * clamped
+                ZStack(alignment: .bottom) {
+                    Wave(phase: 0, amplitude: clamped > 0.02 ? 5 : 0)
+                        .fill(LinearGradient(colors: [Color(hex: 0x6FB7FF), Color(hex: 0x2E8AE0)],
+                                             startPoint: .top, endPoint: .bottom))
+                        .frame(height: max(0, fillHeight) + 12)
+                        .offset(y: 6)
                 }
+                .frame(width: geo.size.width, height: h, alignment: .bottom)
             }
             .clipShape(bottle)
 
