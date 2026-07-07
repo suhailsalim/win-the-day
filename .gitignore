@@ -2,7 +2,7 @@
 .DS_Store
 
 # Xcode
-build/
+/build/
 DerivedData/
 *.xcuserstate
 xcuserdata/
@@ -21,9 +21,14 @@ xcuserdata/
 # OpenWolf (per-developer project intelligence; regenerate with `openwolf init` / `openwolf scan`)
 .wolf/
 
-# Claude Code local hook registration (per-developer; recreated by `openwolf init`)
-.claude/
+# Claude Code: hooks/settings are per-developer, but project skills and rules are shared.
+.claude/*
+!.claude/skills/
+!.claude/rules/
 
 # Secrets — never commit. API keys live in the device Keychain at runtime, not in the repo.
 *.key
 secrets.plist
+
+# MkDocs build output
+site/

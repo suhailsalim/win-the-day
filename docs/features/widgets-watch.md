@@ -37,4 +37,4 @@ summary. Registered in `WatchWidgetBundle.swift`; read the watch App Group.
 
 ## Key files
 `Shared/SharedSnapshot.swift`, `PrayerWidgetExt/*`, `WatchWidgetExt/*`, `WinTheDayWatch/*`,
-`WinTheDay/PhoneSync.swift`, publishers in `AppStore`/`PrayerManager`/`FastingManager`/`WeatherManager`.
+`WinTheDay/App/PhoneSync.swift`, publishers in `AppStore`/`PrayerManager`/`FastingManager`/`WeatherManager`.

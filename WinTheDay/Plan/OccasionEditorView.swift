@@ -7,7 +7,10 @@ struct OccasionEditorView: View {
     @State private var occasion: Occasion
     @State private var date: Date
     @State private var pasted: String = ""
+    @State private var newChecklistItem: String = ""
+    @State private var refineText: String = ""
     private let isNew: Bool
+    private var hasPlan: Bool { !occasion.checklist.isEmpty || !occasion.itinerary.isEmpty }
 
     init(editing: Occasion? = nil) {
         let o = editing ?? Occasion(type: "birthday", dateEpoch: Date().timeIntervalSince1970, recurringAnnual: true)
@@ -24,12 +27,14 @@ struct OccasionEditorView: View {
                     VStack(spacing: 14) {
                         typePicker
                         fields
+                        contextCard
                         if occasion.type == "travel" {
                             pasteCard
                         }
                         planButton
                         if !occasion.checklist.isEmpty { checklistCard }
                         if !occasion.itinerary.isEmpty { itineraryCard }
+                        if hasPlan { refineCard }
                         if !occasion.notes.isEmpty { notesCard }
                         if !isNew { deleteButton }
                     }
@@ -116,48 +121,113 @@ struct OccasionEditorView: View {
         .disabled(store.occasionPlanLoading)
     }
 
+    // User's own brief for the AI — always available, feeds "Plan it" and refinements.
+    private var contextCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Context for the AI (optional)").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                .padding(.horizontal, 16).padding(.top, 10)
+            TextField("Anything the AI should know — budget, vibe, who's coming, must-dos…",
+                      text: $occasion.context, axis: .vertical)
+                .lineLimit(2...6).font(.system(size: 14)).foregroundStyle(Theme.ink)
+                .padding(.horizontal, 16).padding(.bottom, 12)
+        }
+        .glassList()
+    }
+
     private var checklistCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Checklist").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink)
                 .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
-            ForEach(occasion.checklist) { item in
-                Button {
-                    store.toggleChecklistItem(occasionID: occasion.id, itemID: item.id)
-                    if let fresh = store.data.occasions.first(where: { $0.id == occasion.id }) { occasion = fresh }
-                } label: {
-                    HStack(spacing: 10) {
+            ForEach($occasion.checklist) { $item in
+                HStack(spacing: 10) {
+                    Button { item.done.toggle() } label: {
                         Image(systemName: item.done ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(item.done ? Theme.sage : Theme.tertiaryInk)
-                        Text(item.text).font(.system(size: 14)).foregroundStyle(item.done ? Theme.tertiaryInk : Theme.ink)
-                            .strikethrough(item.done)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16).padding(.vertical, 8)
-                }.buttonStyle(.plain)
+                    }.buttonStyle(.plain)
+                    TextField("Item", text: $item.text, axis: .vertical)
+                        .font(.system(size: 14)).foregroundStyle(item.done ? Theme.tertiaryInk : Theme.ink)
+                        .strikethrough(item.done)
+                    Button { occasion.checklist.removeAll { $0.id == item.id } } label: {
+                        Image(systemName: "minus.circle.fill").font(.system(size: 15)).foregroundStyle(Theme.tertiaryInk)
+                    }.buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 6)
             }
-            .padding(.bottom, 8)
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle").foregroundStyle(Theme.accentDark)
+                TextField("Add item", text: $newChecklistItem).font(.system(size: 14)).onSubmit(addChecklistItem)
+                if !newChecklistItem.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Button("Add", action: addChecklistItem).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 8)
         }
         .glassList()
+    }
+    private func addChecklistItem() {
+        let t = newChecklistItem.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return }
+        occasion.checklist.append(ChecklistItem(text: t)); newChecklistItem = ""
     }
 
     private var itineraryCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Itinerary").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink)
                 .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
-            ForEach(occasion.itinerary) { it in
+            ForEach($occasion.itinerary) { $it in
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
-                        Text(it.title).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink)
-                        Spacer()
+                        TextField("Title", text: $it.title).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink)
                         if let d = it.date { Text(AppStore.shortDate(d)).font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk) }
+                        Button { occasion.itinerary.removeAll { $0.id == it.id } } label: {
+                            Image(systemName: "minus.circle.fill").font(.system(size: 15)).foregroundStyle(Theme.tertiaryInk)
+                        }.buttonStyle(.plain)
                     }
-                    if !it.detail.isEmpty { Text(it.detail).font(.system(size: 12.5)).foregroundStyle(Theme.secondaryInk) }
+                    TextField("Details", text: $it.detail, axis: .vertical)
+                        .font(.system(size: 12.5)).foregroundStyle(Theme.secondaryInk)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 8)
+                Hairline()
             }
-            .padding(.bottom, 8)
+            Button { occasion.itinerary.append(ItineraryItem(title: "")) } label: {
+                Label("Add stop", systemImage: "plus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
+            }.buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 10)
         }
         .glassList()
+    }
+
+    // Give the AI feedback to revise the current plan in place.
+    private var refineCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(Theme.accentDark)
+                Text("Refine with AI").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink)
+            }
+            TextField("What should change? e.g. add a beach day, cheaper options, make it veg",
+                      text: $refineText, axis: .vertical)
+                .lineLimit(1...4).font(.system(size: 14))
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .background(RoundedRectangle(cornerRadius: 11).fill(Color.white.opacity(0.5)))
+            Button {
+                let fb = refineText
+                save(silent: true)
+                Task {
+                    await store.planOccasion(occasion.id, refine: fb)
+                    if let fresh = store.data.occasions.first(where: { $0.id == occasion.id }) { occasion = fresh }
+                    refineText = ""
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    if store.occasionPlanLoading { ProgressView().scaleEffect(0.8).tint(.white) }
+                    Text(store.occasionPlanLoading ? "Revising…" : "Apply changes").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 11)
+                .background(RoundedRectangle(cornerRadius: 13).fill(Theme.accentDark))
+            }
+            .buttonStyle(.plain)
+            .disabled(store.occasionPlanLoading || refineText.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(14).glassList()
     }
 
     private var notesCard: some View {

@@ -29,7 +29,13 @@ struct HistoryView: View {
                             .datePickerStyle(.compact).labelsHidden()
                             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
                             .glassList()
-                            .onChange(of: pickDate) { _, d in store.goTo(date: d); dismiss() }
+                            // Only navigate on a real user pick of a DIFFERENT day. Without this
+                            // guard, `.onAppear` seeding `pickDate` to today fires onChange and the
+                            // sheet dismisses itself the moment it opens.
+                            .onChange(of: pickDate) { _, d in
+                                guard AppStore.dateString(d) != store.date else { return }
+                                store.goTo(date: d); dismiss()
+                            }
 
                         if photoTimeline.count >= 2 {
                             SectionHeader(text: "Progress photos")

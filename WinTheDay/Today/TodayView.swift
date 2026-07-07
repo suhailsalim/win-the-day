@@ -72,6 +72,8 @@ struct TodayView: View {
                 store.autofillActivity(steps: health.stepsToday, activeKcal: health.activeEnergyToday)
             }
             await store.computeReadiness(for: store.date, health: health)
+            await health.loadWorkouts(for: store.date, maxHR: 208 - 0.7 * store.targets.ageYears)
+            store.autofillJog(from: health.workoutsForDay)
         }
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
@@ -634,8 +636,71 @@ struct TodayView: View {
             }
             .padding(.trailing, 8).padding(.top, 22)
         }
+        fitnessCard
         workoutsList
         trainingCard
+    }
+
+    // MARK: - Apple Fitness (auto-detected workouts)
+
+    @ViewBuilder private var fitnessCard: some View {
+        let workouts = health.workoutsForDay
+        if !workouts.isEmpty {
+            VStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Image(systemName: "figure.run").font(.system(size: 12)).foregroundStyle(Theme.accentDark)
+                    Text("From Apple Fitness").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.secondaryInk)
+                    Spacer()
+                    Text("feeds Active").font(.system(size: 10.5)).foregroundStyle(Theme.tertiaryInk)
+                }
+                .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 6)
+                ForEach(workouts) { w in
+                    fitnessRow(w)
+                    if w.id != workouts.last?.id { Hairline().padding(.leading, 14) }
+                }
+            }
+            .padding(.bottom, 10).glassList().padding(.top, 10)
+        }
+    }
+
+    private func fitnessRow(_ w: HealthWorkout) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 10) {
+                Image(systemName: w.symbol).font(.system(size: 15)).foregroundStyle(Theme.accentDark).frame(width: 22)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(w.name).font(.system(size: 15)).foregroundStyle(Theme.ink)
+                    Text(fitnessSub(w)).font(.system(size: 12)).foregroundStyle(Theme.secondaryInk)
+                }
+                Spacer()
+                if w.activeKcal > 0 {
+                    Text("\(Int(w.activeKcal)) kcal").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                }
+            }
+            if w.hrZoneMinutes.contains(where: { $0 > 0 }) { hrZoneBar(w.hrZoneMinutes) }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 9)
+    }
+
+    private func fitnessSub(_ w: HealthWorkout) -> String {
+        var parts = ["\(Int(w.durationMin)) min"]
+        if w.distanceKm > 0 { parts.append(String(format: "%.2f km", w.distanceKm)) }
+        if w.avgHR > 0 { parts.append("♥ \(Int(w.avgHR)) avg · \(Int(w.maxHR)) max") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func hrZoneBar(_ zones: [Double]) -> some View {
+        let colors = [Color(hex: 0x8FB0FF), Color(hex: 0x5F9E7A), Color(hex: 0xE0B341), Color(hex: 0xE0873A), Color(hex: 0xD8503A)]
+        let total = max(1, zones.reduce(0, +))
+        return VStack(alignment: .leading, spacing: 3) {
+            GeometryReader { geo in
+                HStack(spacing: 2) {
+                    ForEach(Array(zones.enumerated()), id: \.offset) { i, m in
+                        if m > 0 { Capsule().fill(colors[min(i, 4)]).frame(width: max(2, geo.size.width * m / total)) }
+                    }
+                }
+            }.frame(height: 6)
+            Text("HR zones Z1–Z5").font(.system(size: 10)).foregroundStyle(Theme.tertiaryInk)
+        }
     }
 
     @ViewBuilder private var workoutsList: some View {
@@ -1000,31 +1065,25 @@ struct TodayView: View {
 
     private var healthCard: some View {
         let on = store.settings.healthkit
-        return GlassCard(padding: 16, cornerRadius: 24, tint: .white.opacity(0.46)) {
-            VStack(spacing: 13) {
-                HStack(spacing: 10) {
-                    IconTile(symbol: "heart.fill",
-                             colors: [Color(hex: 0xFF5E7A), Color(hex: 0xFB1E4B)])
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Apple Health")
-                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
-                        Text(on ? "Connected" : "Not connected")
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(Color(hex: 0x4FB286))
-                    }
-                    Spacer()
-                    Text(on ? "Synced now" : "")
-                        .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
-                }
-                HStack(spacing: 10) {
-                    miniStat(title: store.isToday ? "Steps today" : "Steps",
-                             value: on ? stepsString : "—")
-                    miniStat(title: "Weight",
-                             value: weightString)
-                }
-            }
+        return HStack(spacing: 10) {
+            statWidget(icon: "figure.walk", tint: Theme.sage,
+                       title: store.isToday ? "Steps today" : "Steps",
+                       value: on ? stepsString : "—")
+            statWidget(icon: "scalemass.fill", tint: Theme.accentDark,
+                       title: "Weight", value: weightString)
         }
         .padding(.top, 14)
+    }
+
+    private func statWidget(icon: String, tint: Color, title: String, value: String) -> some View {
+        GlassCard(padding: 14, cornerRadius: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: icon).font(.system(size: 16, weight: .semibold)).foregroundStyle(tint)
+                Text(value).font(Theme.display(24)).foregroundStyle(Theme.ink)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                Text(title).font(.system(size: 11.5)).foregroundStyle(Theme.secondaryInk)
+            }
+        }
     }
 
     private var stepsString: String {

@@ -1,0 +1,68 @@
+site_name: Win the Day
+site_description: A local-first iOS companion for health, discipline, faith, and focus.
+site_url: https://suhailaka.github.io/win-the-day/
+repo_url: https://github.com/suhailaka/win-the-day
+docs_dir: docs
+
+# Internal planning docs live in docs/plans/ for repo organization but are not part of the
+# rendered site (they link to source files, which MkDocs can't resolve).
+exclude_docs: |
+  plans/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - User Guide:
+      - Getting started: guide/getting-started.md
+      - Today & rings: guide/today.md
+      - Food & nutrition: guide/food.md
+      - Faith — prayer, Qibla & fasting: guide/faith.md
+      - Sleep & readiness: guide/sleep.md
+      - Study & focus: guide/study-focus.md
+      - Planning your week: guide/planning.md
+      - AI coach: guide/coach.md
+      - Trends, history & reports: guide/trends.md
+      - Widgets & Apple Watch: guide/widgets.md
+      - Settings & privacy: guide/settings.md
+      - FAQ: guide/faq.md
+  - Developer Docs:
+      - Architecture: architecture.md
+      - Logging & meals: features/logging-and-meals.md
+      - Habits & scoring: features/habits-scoring.md
+      - Sleep & readiness: features/sleep-readiness.md
+      - Faith: features/faith.md
+      - Planning: features/planning.md
+      - Coach & AI: features/coach-ai.md
+      - Health data: features/health-data.md
+      - Widgets & watch: features/widgets-watch.md
+      - Data & persistence: features/data-persistence.md

@@ -722,20 +722,27 @@ final class AppStore: ObservableObject {
 
     @Published var occasionPlanLoading = false
 
-    /// Ask the AI to fill in an occasion's ideas/checklist/itinerary.
-    func planOccasion(_ id: String, pasted: String?) async {
+    /// Ask the AI to fill in an occasion's ideas/checklist/itinerary. Feeds the user's own context
+    /// (base comments), any pasted booking, and — when `refine` is set — the CURRENT plan plus the
+    /// requested changes, so the AI revises the existing plan rather than starting from scratch.
+    func planOccasion(_ id: String, pasted: String? = nil, refine: String? = nil) async {
         guard let o = data.occasions.first(where: { $0.id == id }) else { return }
         occasionPlanLoading = true
         let dateText = o.nextDate.map { Self.dateString($0) } ?? ""
+        var ctx: [String] = []
+        if !o.context.isEmpty { ctx.append("User's notes / brief: \(o.context)") }
+        if let pasted, !pasted.isEmpty { ctx.append("Booking / details: \(pasted)") }
+        if let refine, !refine.isEmpty {
+            let current = "Current checklist: " + o.checklist.map { $0.text }.joined(separator: "; ")
+                + (o.itinerary.isEmpty ? "" : "\nCurrent itinerary: " + o.itinerary.map { "\($0.title) — \($0.detail)" }.joined(separator: "; "))
+            ctx.append("Revise the existing plan below per the requested change, keeping what still fits.\n\(current)\nRequested change: \(refine)")
+        }
         do {
             let r = try await estimator.planOccasion(title: o.title, type: o.type, person: o.person,
                                                      location: o.location, dateText: dateText,
-                                                     pasted: pasted, settings: settings)
+                                                     pasted: ctx.isEmpty ? nil : ctx.joined(separator: "\n\n"), settings: settings)
             if let i = data.occasions.firstIndex(where: { $0.id == id }) {
-                // Merge AI ideas into notes; replace checklist/itinerary.
-                if !r.ideas.isEmpty {
-                    data.occasions[i].notes = "Ideas: " + r.ideas.joined(separator: " · ")
-                }
+                if !r.ideas.isEmpty { data.occasions[i].notes = "Ideas: " + r.ideas.joined(separator: " · ") }
                 data.occasions[i].checklist = r.checklist.map { ChecklistItem(text: $0) }
                 data.occasions[i].itinerary = r.itinerary
                 persistData()
@@ -1799,6 +1806,15 @@ final class AppStore: ObservableObject {
             if steps > 0 { e.steps = String(Int(steps)) }
             if activeKcal > 0 { e.activeKcal = activeKcal }
         }
+    }
+
+    /// Pull the day's "longest jog" straight from Apple Fitness — the longest run/walk workout's
+    /// duration — so the user never types it. Only fills up (never overwrites a larger manual value).
+    func autofillJog(from workouts: [HealthWorkout]) {
+        guard isToday else { return }
+        let longest = workouts.filter { $0.isRunWalk }.map { $0.durationMin }.max() ?? 0
+        guard longest >= 1, longest > (Double(draft.run) ?? 0) else { return }
+        mutate { $0.run = String(Int(longest.rounded())) }
     }
 
     /// If the day has no manual weight yet but Health has a body-mass sample, fill it in.
