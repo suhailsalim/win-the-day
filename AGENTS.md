@@ -82,14 +82,28 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 7. **Secrets / privacy.** No keys in the repo. Don't commit `build/`, `.wolf/`, or personal data.
    The user's health notes/labs are sent to the selected AI provider by design (the UI says so).
 
-## Where things live (high-traffic files)
+## Where things live
 
-- `Models.swift` — all data models + `Providers` catalogue + `ModulePrefs` + static content.
-- `AppStore.swift` — `@MainActor` store: persistence, scoring/streak, trends, quick-log, sessions,
-  occasions, readiness, AI orchestration (coach context, week outlook, plan generator), snapshot.
-- `AIEstimator.swift` — provider routing + prompts.
-- `HealthManager.swift` — HealthKit read/write, sleep detail, baselines.
-- Tabs: `TodayView`, `PlanView`, `TrendsView`, `HealthView`, `SettingsView` (+ `RootView` tab bar).
+`WinTheDay/` is organized into feature folders (all auto-join the target — filesystem-synchronized
+groups include subfolders; new files go in the matching folder):
+
+| Folder | Contents |
+|---|---|
+| `App/` | `WinTheDayApp` (entry + DI), `RootView` (tab bar), `OnboardingView`, `AppIntentsSupport`, `PhoneSync` |
+| `Core/` | `Models.swift` (all data models + `ModulePrefs`), `AppStore.swift` (the `@MainActor` hub), `Keychain`, `PhotoStore` |
+| `Engines/` | Pure Foundation-only enums: `ScoreEngine`, `EatingScorer`, `ReadinessScorer`, `RingEngine`, `PrayerClassifier`, `SleepPlanner`, `PrayerTimes` |
+| `Managers/` | `@MainActor ObservableObject` services: Health, Hydration, Fasting, Prayer, Calendar, Weather, StudyTimer |
+| `AI/` | `AIEstimator` (provider routing + prompts), `AppleIntelligence`, `CoachTools` |
+| `Food/` | Food DB + lookup chain, `FoodDB.json`, food log/catalog views, barcode, meal-time sheet |
+| `Today/` `Plan/` `Health/` `Trends/` `Coach/` `Faith/` `Study/` `Settings/` | One folder per feature surface/tab |
+| `UI/` | Shared components (`Components`, `Theme`, `ImagePicker`), `Fonts/` |
+
+`Assets.xcassets` and `WinTheDay.entitlements` stay at `WinTheDay/` root (the entitlements path is
+referenced in build settings — do not move it). High-traffic files: `Core/Models.swift`,
+`Core/AppStore.swift`, `AI/AIEstimator.swift`, `Managers/HealthManager.swift`, `Today/TodayView.swift`.
+
+Plans live in `docs/plans/`; project skills in `.claude/skills/`; user docs in `docs/guide/`
+(MkDocs, `mkdocs.yml` at root).
 
 ## Verify before you're done
 
