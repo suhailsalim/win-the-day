@@ -633,7 +633,8 @@ struct Occasion: Codable, Equatable, Identifiable {
     var recurringAnnual: Bool = false
     var person: String = ""
     var location: String = ""
-    var notes: String = ""
+    var notes: String = ""             // AI-generated ideas summary
+    var context: String = ""           // user's own base comments / brief for the AI
     var checklist: [ChecklistItem] = []
     var itinerary: [ItineraryItem] = []
     var calendarSynced: Bool = false
@@ -654,6 +655,7 @@ struct Occasion: Codable, Equatable, Identifiable {
         person = (try? c.decode(String.self, forKey: .person)) ?? ""
         location = (try? c.decode(String.self, forKey: .location)) ?? ""
         notes = (try? c.decode(String.self, forKey: .notes)) ?? ""
+        context = (try? c.decode(String.self, forKey: .context)) ?? ""
         checklist = (try? c.decode([ChecklistItem].self, forKey: .checklist)) ?? []
         itinerary = (try? c.decode([ItineraryItem].self, forKey: .itinerary)) ?? []
         calendarSynced = (try? c.decode(Bool.self, forKey: .calendarSynced)) ?? false

@@ -32,6 +32,9 @@ struct RootView: View {
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
+            // Re-identify the scroll view per tab so switching tabs starts at the top instead of
+            // inheriting the previous tab's scroll offset.
+            .id(store.tab)
 
             TabBar(tab: $store.tab)
                 .padding(.horizontal, 14)

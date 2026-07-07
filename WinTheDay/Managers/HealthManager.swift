@@ -1,6 +1,23 @@
 import Foundation
 import HealthKit
 
+/// One workout auto-detected from Apple Health / Fitness for a day. Transient (not persisted).
+struct HealthWorkout: Identifiable, Equatable {
+    let id: UUID
+    var kind: String            // internal kind used by Active/training
+    var name: String            // display, e.g. "Running"
+    var symbol: String          // SF Symbol
+    var start: Date
+    var durationMin: Double
+    var activeKcal: Double
+    var distanceKm: Double
+    var avgHR: Double
+    var maxHR: Double
+    /// Minutes spent in HR zones Z1…Z5 (by % of max HR). Empty if no HR data.
+    var hrZoneMinutes: [Double] = []
+    var isRunWalk: Bool { kind == "run" || kind == "walk" }
+}
+
 /// Reads steps + body mass and writes dietary energy + protein.
 /// Falls back to deterministic placeholder values when HealthKit is unavailable
 /// (e.g. on Simulator) so the UI still has something to show.
@@ -46,7 +63,8 @@ final class HealthManager: ObservableObject {
         }
         let read: Set<HKObjectType> = [
             stepType, weightType, activeEnergyType, restingHRType, hrvType, respiratoryRateType, sleepType,
-            energyType, proteinType, bodyFatType, leanMassType, bmiType, HKObjectType.workoutType()
+            energyType, proteinType, bodyFatType, leanMassType, bmiType, HKObjectType.workoutType(),
+            HKQuantityType(.heartRate), HKQuantityType(.distanceWalkingRunning), HKQuantityType(.distanceCycling)
         ]
         var write: Set<HKSampleType> = [
             energyType, proteinType, weightType, bodyFatType, leanMassType, bmiType,
@@ -134,7 +152,8 @@ final class HealthManager: ObservableObject {
     }
 
     /// Daily step totals for the last `days` days (oldest → newest) for the Trends chart.
-    func loadStepsHistory(days: Int = 14) async {
+    /// 90 days so the 30-day and "All" ranges show real history instead of being capped short.
+    func loadStepsHistory(days: Int = 90) async {
         guard available else { return }
         let cal = Calendar.current
         let end = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date())) ?? Date()
@@ -383,6 +402,86 @@ final class HealthManager: ObservableObject {
         let sorted = values.sorted()
         let mid = sorted.count / 2
         return sorted.count % 2 == 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+    }
+
+    // MARK: - Apple Fitness workouts (auto-detected)
+
+    @Published var workoutsForDay: [HealthWorkout] = []
+
+    /// Reads every workout Apple Health recorded for a day — type, duration, active calories,
+    /// distance, average/max HR and a HR-zone breakdown — for the fitness card and the Active score.
+    func loadWorkouts(for dateString: String, maxHR: Double) async {
+        guard available else { workoutsForDay = []; return }
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: AppStore.parse(dateString))
+        let end = min(Date(), cal.date(byAdding: .day, value: 1, to: start) ?? Date())
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+        let workouts: [HKWorkout] = await withCheckedContinuation { cont in
+            let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+            let q = HKSampleQuery(sampleType: .workoutType(), predicate: predicate,
+                                  limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+                cont.resume(returning: (samples as? [HKWorkout]) ?? [])
+            }
+            store.execute(q)
+        }
+        var out: [HealthWorkout] = []
+        for w in workouts {
+            let kcal = w.statistics(for: HKQuantityType(.activeEnergyBurned))?
+                .sumQuantity()?.doubleValue(for: .kilocalorie()) ?? 0
+            var distKm = 0.0
+            for dt in [HKQuantityType(.distanceWalkingRunning), HKQuantityType(.distanceCycling)] {
+                if let d = w.statistics(for: dt)?.sumQuantity()?.doubleValue(for: .meter()), d > 0 { distKm = d / 1000; break }
+            }
+            let hr = await fetchHRStats(start: w.startDate, end: w.endDate, maxHR: maxHR)
+            let meta = Self.workoutMeta(w.workoutActivityType)
+            out.append(HealthWorkout(id: w.uuid, kind: meta.kind, name: meta.name, symbol: meta.symbol,
+                                     start: w.startDate, durationMin: w.duration / 60, activeKcal: kcal,
+                                     distanceKm: distKm, avgHR: hr.avg, maxHR: hr.max, hrZoneMinutes: hr.zones))
+        }
+        workoutsForDay = out
+    }
+
+    /// Average/max HR + zone minutes over a workout window (empty zones when no HR samples).
+    private func fetchHRStats(start: Date, end: Date, maxHR: Double) async -> (avg: Double, max: Double, zones: [Double]) {
+        let hrType = HKQuantityType(.heartRate)
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+        let samples: [Double] = await withCheckedContinuation { cont in
+            let q = HKSampleQuery(sampleType: hrType, predicate: predicate, limit: HKObjectQueryNoLimit,
+                                  sortDescriptors: nil) { _, s, _ in
+                cont.resume(returning: (s as? [HKQuantitySample])?.map { $0.quantity.doubleValue(for: unit) } ?? [])
+            }
+            store.execute(q)
+        }
+        guard !samples.isEmpty else { return (0, 0, []) }
+        let avg = samples.reduce(0, +) / Double(samples.count)
+        let peak = samples.max() ?? 0
+        let mhr = maxHR > 0 ? maxHR : 190
+        let durationMin = end.timeIntervalSince(start) / 60
+        var buckets = [Double](repeating: 0, count: 5)   // Z1<60% … Z5≥90%
+        for hr in samples {
+            let pct = hr / mhr
+            let z = pct < 0.6 ? 0 : (pct < 0.7 ? 1 : (pct < 0.8 ? 2 : (pct < 0.9 ? 3 : 4)))
+            buckets[z] += 1
+        }
+        let total = Double(samples.count)
+        return (avg, peak, buckets.map { $0 / total * durationMin })
+    }
+
+    /// Map a HealthKit activity type to our (kind, display name, SF Symbol).
+    private static func workoutMeta(_ t: HKWorkoutActivityType) -> (kind: String, name: String, symbol: String) {
+        switch t {
+        case .running: return ("run", "Running", "figure.run")
+        case .walking, .hiking: return ("walk", "Walk", "figure.walk")
+        case .cycling: return ("cardio", "Cycling", "figure.outdoor.cycle")
+        case .traditionalStrengthTraining, .functionalStrengthTraining: return ("strength", "Strength", "dumbbell.fill")
+        case .highIntensityIntervalTraining: return ("cardio", "HIIT", "figure.highintensity.intervaltraining")
+        case .swimming: return ("cardio", "Swimming", "figure.pool.swim")
+        case .yoga: return ("mobility", "Yoga", "figure.yoga")
+        case .flexibility, .cooldown: return ("mobility", "Mobility", "figure.flexibility")
+        case .coreTraining: return ("strength", "Core", "figure.core.training")
+        default: return ("other", "Workout", "figure.mixed.cardio")
+        }
     }
 
     private func fetchWorkoutsThisWeek() async -> Int {

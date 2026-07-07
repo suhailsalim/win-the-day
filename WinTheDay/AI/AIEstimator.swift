@@ -143,7 +143,7 @@ struct AIEstimator {
             "Occasion: \(title) (type: \(type))" + (person.isEmpty ? "" : ", for \(person)")
                 + (location.isEmpty ? "" : ", at \(location)") + (dateText.isEmpty ? "" : ", on \(dateText)")
         ]
-        if let pasted, !pasted.isEmpty { lines.append("Booking / details provided:\n\(pasted)") }
+        if let pasted, !pasted.isEmpty { lines.append("Context, preferences and requested changes to honor:\n\(pasted)") }
         if isTravel {
             lines.append("Build a practical day-by-day itinerary AND a packing/prep checklist. Keep items short and actionable.")
         } else {
