@@ -7,6 +7,7 @@ struct SettingsView: View {
     @EnvironmentObject var hydration: HydrationManager
     @EnvironmentObject var fasting: FastingManager
     @EnvironmentObject var calendar: CalendarManager
+    @EnvironmentObject var lock: AppLock
     @Binding var confirmReset: Bool
 
     @State private var providersOpen = false
@@ -19,6 +20,7 @@ struct SettingsView: View {
     @State private var pdfURL: URL?
     @State private var showPDFShare = false
     @State private var testState: TestState = .idle
+    @State private var lockNote = ""
 
     private enum TestState: Equatable {
         case idle, running, ok(String), failed(String)
@@ -105,6 +107,13 @@ struct SettingsView: View {
                 .padding(.horizontal, 16).padding(.vertical, 13).glassList()
             }
             .buttonStyle(.plain)
+
+            SectionHeader(text: "Privacy")
+            privacyCard
+            Text("The lock covers this app only — widgets, the watch app and notifications are governed by iOS.")
+                .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                .padding(.horizontal, 16).padding(.top, 7)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             SectionHeader(text: "Backup & data")
             dataCard
@@ -837,6 +846,70 @@ struct SettingsView: View {
             return "Last auto-backup: \(f.string(from: d)).\n\n" + base
         }
         return base
+    }
+
+    // MARK: - Privacy (app lock)
+
+    private var privacyCard: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                IconTile(symbol: "lock.fill", colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)])
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Require \(AppLock.biometryLabel)").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                    Text("Lock Win the Day when you leave it").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                }
+                Spacer()
+                ToggleRow(on: store.settings.appLockEnabled) { toggleAppLock() }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            if store.settings.appLockEnabled {
+                Hairline()
+                Menu {
+                    ForEach(AppSettings.appLockGraceOptions, id: \.self) { m in
+                        Button(Self.graceLabel(m)) { store.updateSettings { $0.appLockGraceMinutes = m } }
+                    }
+                } label: {
+                    pickerLabel("Ask again after", Self.graceLabel(store.settings.appLockGraceMinutes))
+                }
+            }
+            if !lockNote.isEmpty {
+                Hairline()
+                Text(lockNote)
+                    .font(.system(size: 12)).foregroundStyle(Color(hex: 0xD86B4A))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.vertical, 9)
+            }
+        }
+        .glassList()
+        .onAppear { lockNote = lock.unavailableNote }
+    }
+
+    /// Flipping the toggle on authenticates once first — proving it works before we can lock the
+    /// user out of their own data. A refusal (no device passcode) explains itself and stays off.
+    private func toggleAppLock() {
+        if store.settings.appLockEnabled {
+            store.updateSettings { $0.appLockEnabled = false }
+            lock.syncEnabled(false)
+            lockNote = ""
+            return
+        }
+        Task {
+            if let why = await lock.authenticate(reason: "Turn on app lock for Win the Day") {
+                lockNote = why
+            } else {
+                lockNote = ""
+                store.updateSettings { $0.appLockEnabled = true }
+                lock.syncEnabled(true)
+            }
+        }
+    }
+
+    private static func graceLabel(_ minutes: Int) -> String {
+        switch minutes {
+        case 0: return "Immediately"
+        case 1: return "1 minute"
+        default: return "\(minutes) minutes"
+        }
     }
 
     // MARK: - Data
