@@ -136,8 +136,10 @@ struct WatchView: View {
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     ForEach(prayers, id: \.0) { key, label in
+                        // The key stays "dhuhr"; only the Friday label differs.
+                        let shown = (key == "dhuhr" && sync.snapshot.jumuahToday) ? "Jumu'ah" : label
                         Button { sync.send(action: "prayer", name: key) } label: {
-                            Text(label).frame(maxWidth: .infinity)
+                            Text(shown).frame(maxWidth: .infinity)
                         }
                         .tint(accent)
                     }

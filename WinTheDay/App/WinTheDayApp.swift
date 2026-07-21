@@ -45,6 +45,10 @@ struct WinTheDayApp: App {
                 // computed Maghrib moves (a new location, a new day, a method change).
                 .task { ramadan.attach(prayer: prayer, fasting: fasting); syncRamadan() }
                 .onChange(of: prayer.today?[.maghrib]) { _, _ in ramadan.refresh(force: true); syncRamadan() }
+                // Jumu'ah "auto" follows the sex in Targets; mirror it so the notification
+                // scheduler, which runs without the store, can resolve it too.
+                .task { prayer.syncSex(male: store.targets.sexMale) }
+                .onChange(of: store.targets.sexMale) { _, male in prayer.syncSex(male: male) }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {

@@ -51,9 +51,14 @@ enum WidgetActionQueue {
 let widgetPrayerCycle = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
 
 func duePrayer(_ snap: SharedSnapshot) -> (key: String, label: String)? {
-    guard let i = widgetPrayerCycle.firstIndex(of: snap.nextPrayerName) else { return nil }
+    // On Fridays the app names the Dhuhr slot "Jumu'ah". Map it back before the lookup, or the
+    // cycle wouldn't match and the widget's mark-prayer button would vanish every Friday.
+    let next = snap.nextPrayerName == "Jumu'ah" ? "Dhuhr" : snap.nextPrayerName
+    guard let i = widgetPrayerCycle.firstIndex(of: next) else { return nil }
     let label = widgetPrayerCycle[(i + widgetPrayerCycle.count - 1) % widgetPrayerCycle.count]
-    return (label.lowercased(), label)
+    // The key queued for the app stays "dhuhr" — only the visible label changes.
+    let display = (label == "Dhuhr" && snap.jumuahToday) ? "Jumu'ah" : label
+    return (label.lowercased(), display)
 }
 
 /// One glass of water from the hydration widget. Fixed at 250 ml — the user's glass size lives in

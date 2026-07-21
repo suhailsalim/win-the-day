@@ -1054,7 +1054,8 @@ struct TodayView: View {
                     }
                     Spacer()
                     if let next {
-                        Text("Next: \(next.0.label) \(timeStr(next.1))")
+                        let at = prayer.displayTime(next.0, on: next.1, from: times) ?? next.1
+                        Text("Next: \(prayer.label(next.0, on: next.1)) \(timeStr(at))")
                             .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accentDark)
                     }
                     Button { showQibla = true } label: {
@@ -1071,8 +1072,10 @@ struct TodayView: View {
                         let band = store.prayerBand(name)
                         Button { store.togglePrayer(name, times: times, nextFajr: prayer.nextFajr) } label: {
                             VStack(spacing: 4) {
-                                Text(name.label).font(.system(size: 11)).foregroundStyle(Theme.secondaryInk)
-                                Text(prayed ? band.label : timeStr(date))
+                                Text(prayer.label(name, on: date))
+                                    .font(.system(size: 11)).foregroundStyle(Theme.secondaryInk)
+                                    .lineLimit(1).minimumScaleFactor(0.75)
+                                Text(prayed ? band.label : timeStr(prayer.displayTime(name, on: date, from: times) ?? date))
                                     .font(.system(size: 12.5, weight: .semibold))
                                     .foregroundStyle(prayed ? .white : (isNext ? Theme.accentDark : Theme.ink))
                                 Image(systemName: prayed ? "checkmark.circle.fill" : "circle")

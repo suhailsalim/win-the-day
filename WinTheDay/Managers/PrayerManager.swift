@@ -31,7 +31,68 @@ final class PrayerManager: NSObject, ObservableObject {
     @Published var locationAuthorized = false
     @Published var statusNote: String = ""
 
+    /// "auto" | "on" | "off". Jumu'ah replaces Dhuhr on Friday for those it is obligatory on — in
+    /// the majority view, adult resident men. "auto" follows the sex in Targets, but onboarding
+    /// never asks for that (it defaults to male), so this stays user-correctable rather than the app
+    /// quietly deciding a point of practice on someone's behalf.
+    @Published var jumuahMode: String
+    /// Minutes past midnight of the local congregation, or -1 to use the computed Dhuhr. A mosque's
+    /// khutbah time is set by the mosque, not by astronomy — it can only be entered, not derived.
+    @Published var jumuahMinute: Int
+    /// Mirrored from `Targets.sexMale` so notification scheduling, which runs without the store, can
+    /// resolve "auto" too.
+    @Published var userIsMale: Bool
+
     static let madhabs = ["hanafi", "shafi", "maliki", "hanbali"]
+    static let jumuahModes = ["auto", "on", "off"]
+
+    /// Does this user observe Jumu'ah at all? (Independent of what day it is.)
+    var observesJumuah: Bool {
+        switch jumuahMode {
+        case "on": return true
+        case "off": return false
+        default: return userIsMale
+        }
+    }
+
+    /// Does the Dhuhr slot read as Jumu'ah on `date`?
+    func isJumuah(on date: Date = Date()) -> Bool {
+        observesJumuah && PrayerTimes.isFriday(date)
+    }
+
+    /// Display name for a prayer on a given day — "Jumu'ah" in place of Dhuhr on Fridays.
+    func label(_ name: PrayerTimes.Name, on date: Date = Date()) -> String {
+        name.label(jumuah: isJumuah(on: date))
+    }
+
+    /// The time to *show*. Identical to the computed time except for Jumu'ah when a congregation
+    /// time has been entered. The underlying window is untouched, so classification and scoring
+    /// still run off the astronomical Dhuhr and marking early or late bands the same as ever.
+    func displayTime(_ name: PrayerTimes.Name, on date: Date, from times: PrayerTimes?) -> Date? {
+        guard let base = times?[name] else { return nil }
+        guard name == .dhuhr, isJumuah(on: date), jumuahMinute >= 0 else { return base }
+        return Calendar.current.date(bySettingHour: jumuahMinute / 60, minute: jumuahMinute % 60,
+                                     second: 0, of: base) ?? base
+    }
+
+    func setJumuahMode(_ m: String) {
+        jumuahMode = Self.jumuahModes.contains(m) ? m : "auto"
+        persist(); refreshFromCache()
+    }
+
+    /// Pass -1 to fall back to the computed Dhuhr.
+    func setJumuahMinute(_ m: Int) {
+        jumuahMinute = m < 0 ? -1 : min(24 * 60 - 1, m)
+        persist(); refreshFromCache()
+    }
+
+    /// Called by the app whenever Targets change, so "auto" tracks the user's sex.
+    func syncSex(male: Bool) {
+        guard male != userIsMale else { return }
+        userIsMale = male
+        defaults.set(male, forKey: "prayer_user_male")
+        refreshFromCache()
+    }
 
     /// Asr shadow factor: Hanafi = 2, everyone else (incl. Shia/Jafari) = 1.
     private var asrFactor: Double { (branch == "sunni" && madhab == "hanafi") ? 2 : 1 }
@@ -55,6 +116,10 @@ final class PrayerManager: NSObject, ObservableObject {
             madhab = (defaults.object(forKey: "prayer_hanafi") as? Bool ?? true) ? "hanafi" : "shafi"
         }
         ramadanMode = defaults.object(forKey: "prayer_ramadan") as? Bool ?? false
+        let savedJumuah = defaults.string(forKey: "prayer_jumuah") ?? "auto"
+        jumuahMode = PrayerManager.jumuahModes.contains(savedJumuah) ? savedJumuah : "auto"
+        jumuahMinute = defaults.object(forKey: "prayer_jumuah_minute") as? Int ?? -1
+        userIsMale = defaults.object(forKey: "prayer_user_male") as? Bool ?? true
         let savedMethod = defaults.string(forKey: "prayer_method") ?? "Muslim World League"
         method = CalcMethod.all.first { $0.name == savedMethod } ?? .mwl
         if let lat = defaults.object(forKey: "prayer_lat") as? Double,
@@ -73,6 +138,9 @@ final class PrayerManager: NSObject, ObservableObject {
         defaults.set(branch, forKey: "prayer_branch")
         defaults.set(madhab, forKey: "prayer_madhab")
         defaults.set(ramadanMode, forKey: "prayer_ramadan")
+        defaults.set(jumuahMode, forKey: "prayer_jumuah")
+        defaults.set(jumuahMinute, forKey: "prayer_jumuah_minute")
+        defaults.set(userIsMale, forKey: "prayer_user_male")
         defaults.set(method.name, forKey: "prayer_method")
         if let c = coordinate {
             defaults.set(c.latitude, forKey: "prayer_lat")
@@ -164,9 +232,10 @@ final class PrayerManager: NSObject, ObservableObject {
         for suite in [SharedStore.appGroup, SharedStore.watchAppGroup] {
             var s = SharedStore.load(suite: suite)
             if let next = nextPrayer {
-                s.nextPrayerName = next.0.label
-                s.nextPrayerEpoch = next.1.timeIntervalSince1970
+                s.nextPrayerName = label(next.0, on: next.1)
+                s.nextPrayerEpoch = (displayTime(next.0, on: next.1, from: today) ?? next.1).timeIntervalSince1970
             }
+            s.jumuahToday = isJumuah()
             s.placeName = placeName
             s.ramadanSuhoorEpoch = ramadanMode ? (suhoorEnd?.timeIntervalSince1970 ?? 0) : 0
             s.ramadanIftarEpoch = ramadanMode ? (iftar?.timeIntervalSince1970 ?? 0) : 0
@@ -179,6 +248,9 @@ final class PrayerManager: NSObject, ObservableObject {
         let center = UNUserNotificationCenter.current()
         let prefix = prayerNotePrefix
         let method = activeMethod
+        // Snapshot main-actor state into locals before the escaping closure (AGENTS.md).
+        let jumuah = observesJumuah
+        let jumuahAt = jumuahMinute
         center.getPendingNotificationRequests { reqs in
             let ours = reqs.filter { $0.identifier.hasPrefix(prefix) }.map { $0.identifier }
             center.removePendingNotificationRequests(withIdentifiers: ours)
@@ -193,10 +265,20 @@ final class PrayerManager: NSObject, ObservableObject {
                                                ishaAngle: method.ishaAngle, asrFactor: asrFactor)
                 // Skip Fajr — no notification at ~4:30 AM.
                 for (name, date) in pt.ordered where name.isPrayer && name != .fajr && date > now {
-                    let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+                    // Friday is resolved per scheduled day in the target time zone, not per "today".
+                    let isJumuah = jumuah && name == .dhuhr && PrayerTimes.isFriday(date, calendar: cal)
+                    var comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+                    if isJumuah, jumuahAt >= 0 {
+                        comps.hour = jumuahAt / 60
+                        comps.minute = jumuahAt % 60
+                        // A congregation earlier than the astronomical Dhuhr would be invalid; the
+                        // picker prevents it, but a stale value must not schedule into the past.
+                        if let fires = cal.date(from: comps), fires <= now { continue }
+                    }
+                    let title = name.label(jumuah: isJumuah)
                     let content = UNMutableNotificationContent()
-                    content.title = "\(name.label) 🕌"
-                    content.body = "It\u{2019}s time for \(name.label) — tap to mark it once you\u{2019}ve prayed."
+                    content.title = "\(title) 🕌"
+                    content.body = "It\u{2019}s time for \(title) — tap to mark it once you\u{2019}ve prayed."
                     content.sound = .default
                     let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
                     let id = "\(prefix)\(name.rawValue)-\(comps.year!)-\(comps.month!)-\(comps.day!)"
