@@ -35,7 +35,10 @@ struct WinTheDayApp: App {
                 .task { lock.start(enabled: store.settings.appLockEnabled) }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { store.writeAutoBackup() }
+            if phase == .background {
+                store.writeAutoBackup()
+                store.refreshSmartReminders(force: true)
+            }
             let on = store.settings.appLockEnabled
             switch phase {
             case .inactive:   lock.willResignActive(enabled: on)

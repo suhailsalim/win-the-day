@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import UIKit
 import WidgetKit
-import UserNotifications
+@preconcurrency import UserNotifications
 
 enum Tab: String { case today, plan, trends, health, settings }
 
@@ -558,6 +558,7 @@ final class AppStore: ObservableObject {
         persistData()
         publishSnapshot()
         scheduleMilestoneCheck()
+        refreshSmartReminders()   // debounced to once a minute; forced again on background
     }
 
     /// Push the bits the home-screen widgets show into the shared App Group.
@@ -2182,6 +2183,81 @@ final class AppStore: ObservableObject {
         content.sound = .default
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
         center.add(UNNotificationRequest(identifier: "weekly-review", content: content, trigger: trigger))
+    }
+
+    // MARK: - Smart reminders (rule-based nudges — see Engines/ReminderEngine.swift)
+
+    /// Last time we touched the notification centre, so a burst of edits doesn't spam it.
+    private var lastSmartReminderSync: Date?
+
+    /// Today's state, flattened for the engine. Always *today* — the user may be viewing an older
+    /// day in the editor, and reminders are only ever about the day we're actually living.
+    private func smartReminderState() -> ReminderEngine.State {
+        let todayKey = Self.dateString(Date())
+        let e = (date == todayKey ? draft : data.entries[todayKey]) ?? Entry(date: todayKey)
+        let loggedProtein = e.foodEntries.reduce(0) { $0 + $1.totalProtein }
+            + e.logged.reduce(0) { $0 + $1.protein * Double($1.qty) }
+        var s = ReminderEngine.State()
+        s.now = Date()
+        s.dayKey = todayKey
+        s.enabled = settings.smartReminders
+        s.streakRule = settings.smartStreakRule
+        s.dinnerRule = settings.smartDinnerRule
+        s.bedtimeRule = settings.smartBedtimeRule
+        s.proteinRule = settings.smartProteinRule
+        s.eveningHour = settings.smartEveningHour
+        s.dayStatus = effectiveStatus(for: todayKey)
+        s.habitsTotal = activeHabits.count
+        s.habitsDone = score(e)
+        s.dinnerLogged = !e.meals.dinner.trimmingCharacters(in: .whitespaces).isEmpty
+            || e.foodEntries.contains { $0.mealKey == "dinner" }
+        s.dinnerCutoffEpoch = sleepPlanTonight?.dinnerCutoffEpoch ?? 0
+        s.recommendedBedEpoch = sleepPlanTonight?.recommendedBedEpoch ?? 0
+        s.proteinG = max(Double(e.proteinG) ?? 0, loggedProtein)
+        s.proteinTargetG = targets.protein
+        return s
+    }
+
+    /// Recompute the `smart-` set and hand it to the notification centre: clear the whole prefix,
+    /// then add what today still earns (so all-toggles-off cancels rather than merely stops adding).
+    /// Debounced to once a minute in-app; `force` is for backgrounding and for settings changes.
+    /// Silent no-op when notifications were never granted — this never re-prompts.
+    func refreshSmartReminders(force: Bool = false) {
+        if !force, let last = lastSmartReminderSync, Date().timeIntervalSince(last) < 60 { return }
+        lastSmartReminderSync = Date()
+        let state = smartReminderState()
+        let planned = ReminderEngine.plan(state)
+        let dayKey = state.dayKey
+        let prefix = ReminderEngine.idPrefix
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { note in
+            let granted = note.authorizationStatus == .authorized || note.authorizationStatus == .provisional
+            guard granted else { return }
+            center.getPendingNotificationRequests { reqs in
+                let ours = reqs.filter { $0.identifier.hasPrefix(prefix) }.map { $0.identifier }
+                center.removePendingNotificationRequests(withIdentifiers: ours)
+                for r in planned {
+                    let content = UNMutableNotificationContent()
+                    content.title = r.title
+                    content.body = r.body
+                    content.sound = .default
+                    let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute],
+                                                                from: r.fireDate)
+                    let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+                    center.add(UNNotificationRequest(identifier: r.identifier(dayKey: dayKey),
+                                                     content: content, trigger: trigger))
+                }
+                #if DEBUG
+                print("[smart-reminders] \(planned.map { $0.identifier(dayKey: dayKey) })")
+                #endif
+            }
+        }
+    }
+
+    /// Settings-screen entry point: change a smart-reminder flag and reschedule right away.
+    func updateSmartReminders(_ change: (inout AppSettings) -> Void) {
+        updateSettings(change)
+        refreshSmartReminders(force: true)
     }
 
     // MARK: - Daily suggestion

@@ -47,6 +47,9 @@ struct SettingsView: View {
             SectionHeader(text: "Hydration")
             hydrationCard
 
+            SectionHeader(text: "Smart reminders")
+            smartRemindersCard
+
             SectionHeader(text: "Prayer times")
             prayerCard
 
@@ -450,6 +453,47 @@ struct SettingsView: View {
             Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(Color(white: 0.27).opacity(0.3))
         }
         .padding(.horizontal, 16).padding(.vertical, 13)
+    }
+
+    // MARK: - Smart reminders (rule-based nudges — ReminderEngine)
+
+    private var smartRemindersCard: some View {
+        VStack(spacing: 0) {
+            smartRow("Smart nudges", "Rules over today's data — no AI, nothing leaves the phone",
+                     store.settings.smartReminders) { $0.smartReminders.toggle() }
+            if store.settings.smartReminders {
+                Hairline()
+                smartRow("Streak at risk", "Evening ping when the day is still winnable",
+                         store.settings.smartStreakRule) { $0.smartStreakRule.toggle() }
+                Hairline()
+                stepperRow("Evening check", value: "\(store.settings.smartEveningHour):00",
+                           dec: { store.updateSmartReminders { $0.smartEveningHour = max(16, $0.smartEveningHour - 1) } },
+                           inc: { store.updateSmartReminders { $0.smartEveningHour = min(23, $0.smartEveningHour + 1) } })
+                Hairline()
+                smartRow("Dinner window", "30 min before tonight's dinner cutoff",
+                         store.settings.smartDinnerRule) { $0.smartDinnerRule.toggle() }
+                Hairline()
+                smartRow("Wind down", "30 min before the recommended bed time",
+                         store.settings.smartBedtimeRule) { $0.smartBedtimeRule.toggle() }
+                Hairline()
+                smartRow("Protein check", "At 6pm if protein is still well short",
+                         store.settings.smartProteinRule) { $0.smartProteinRule.toggle() }
+            }
+        }
+        .glassList()
+    }
+
+    private func smartRow(_ label: String, _ sub: String, _ on: Bool,
+                          _ change: @escaping (inout AppSettings) -> Void) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label).font(.system(size: 16)).foregroundStyle(Theme.ink)
+                Text(sub).font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+            }
+            Spacer()
+            ToggleRow(on: on) { store.updateSmartReminders(change) }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
     // MARK: - Personalize (pillar names + module colors)
