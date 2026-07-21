@@ -37,7 +37,7 @@ struct RamadanModuleView: View {
     private var card: some View {
         TimelineView(.periodic(from: .now, by: 30)) { ctx in
             let now = ctx.date
-            GlassCard(padding: 16, cornerRadius: 20, tint: Color(hex: 0x3B4A7C).opacity(0.12)) {
+            GlassCard(padding: 16, cornerRadius: 20, tint: Theme.accentDark.opacity(0.12)) {
                 VStack(alignment: .leading, spacing: 12) {
                     headline(now: now)
                     if ramadan.hasComputedTimes {
@@ -59,7 +59,8 @@ struct RamadanModuleView: View {
     private func headline(now: Date) -> some View {
         HStack(spacing: 13) {
             IconTile(symbol: "moon.stars.fill",
-                     colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)], size: 36, corner: 11)
+                     colors: [Theme.adaptive(light: 0x6470A6, darkGrey: 0x7C89C8),
+                              Theme.adaptive(light: 0x3B4A7C, darkGrey: 0x5766A8)], size: 36, corner: 11)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title(now: now))
                     .font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
@@ -111,7 +112,7 @@ struct RamadanModuleView: View {
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color(white: 0.5).opacity(0.15)).frame(height: 8)
+                    Capsule().fill(Theme.tertiaryInk.opacity(0.15)).frame(height: 8)
                     Capsule().fill(progress >= 1 ? Theme.sage : Theme.accentDark)
                         .frame(width: geo.size.width * progress, height: 8)
                 }
@@ -130,7 +131,7 @@ struct RamadanModuleView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(fastingToday ? Theme.accentDark : .white)
                     .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(fastingToday ? AnyShapeStyle(Color.white.opacity(0.6))
+                    .background(Capsule().fill(fastingToday ? AnyShapeStyle(Theme.surfaceOverlay)
                                                             : AnyShapeStyle(Theme.accentDark)))
                     .overlay(Capsule().strokeBorder(Theme.accent.opacity(fastingToday ? 0.4 : 0), lineWidth: 0.5))
             }

@@ -61,8 +61,8 @@ struct QiblaView: View {
 
                     ZStack {
                         Circle().fill(.ultraThinMaterial)
-                            .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
-                            .shadow(color: Color(hex: 0x2A3350).opacity(0.12), radius: 14, y: 6)
+                            .overlay(Circle().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
+                            .shadow(color: Theme.surfaceShadow, radius: 14, y: 6)
                         // cardinal ticks rotate opposite to heading
                         compassDial.rotationEffect(.degrees(-qibla.heading))
                         // qibla arrow
@@ -85,7 +85,7 @@ struct QiblaView: View {
                             .font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
                         if !qibla.headingAvailable {
                             Text("Compass not available on this device.")
-                                .font(.system(size: 13)).foregroundStyle(Color(hex: 0xD86B4A))
+                                .font(.system(size: 13)).foregroundStyle(Theme.coral)
                         } else if !qibla.haveLocation {
                             Text("Getting your location…").font(.system(size: 13)).foregroundStyle(Theme.tertiaryInk)
                         }
