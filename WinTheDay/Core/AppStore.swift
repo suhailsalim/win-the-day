@@ -1904,8 +1904,15 @@ final class AppStore: ObservableObject {
     // MARK: - Readiness & sleep score
 
     @Published var readinessFactors: [ReadinessFactor] = []
+    /// What Readiness would have been on sensor data alone, when today's check-in moved it. 0 = no adjustment.
+    @Published var readinessSensorOnly: Int = 0
     @Published var sleepPlanTonight: SleepPlanner.Plan?
     var readinessToday: Int { draft.readiness }
+
+    /// Store the viewed day's self-report check-in. Caller re-runs `computeReadiness` so the ring moves now.
+    func updateCheckIn(_ c: DayCheckIn) {
+        mutate { $0.checkIn = c }
+    }
 
     /// Last `days` calendar days' Sleep/Readiness/Active scores (oldest→newest, zero/uncomputed dropped)
     /// for the sleep module's mini trend graph.
@@ -1927,6 +1934,7 @@ final class AppStore: ObservableObject {
         guard let sleep else {   // nothing to score
             if dateString == draft.date { mutate { $0.sleep = nil; $0.readiness = 0; $0.sleepScore = 0; $0.activeScore = nil } }
             readinessFactors = []
+            readinessSensorOnly = 0
             return
         }
         async let hrvMedian = health.fetchHRVOvernightMedian(nightEnding: day)
@@ -1978,6 +1986,17 @@ final class AppStore: ObservableObject {
             checkIn: checkIn, baselines: baselines)
         let r = ScoreEngine.compute(inputs)
         readinessFactors = r.factors
+
+        // Transparency: what the same inputs score with the self-report removed. The engine is pure
+        // and cheap, so running it twice is cheaper than threading a second number through it.
+        if checkIn != DayCheckIn() {
+            var sensorOnly = inputs
+            sensorOnly.checkIn = DayCheckIn()
+            let base = ScoreEngine.compute(sensorOnly).readiness
+            readinessSensorOnly = base != r.readiness ? base : 0
+        } else {
+            readinessSensorOnly = 0
+        }
 
         if dateString == draft.date {
             let planS = ScoreEngine.strain(activeKcal: priorKcal, typicalActiveKcal: typicalKcal)

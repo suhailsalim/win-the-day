@@ -26,6 +26,7 @@ struct TodayView: View {
     @State private var showFocus = false
     @State private var showFoodAdd = false
     @State private var foodAddMeal = "breakfast"
+    @State private var showCheckIn = false
 
     private struct MealKey: Identifiable { let id: String }
     private struct ExportedText: Identifiable { let id = UUID(); let text: String }
@@ -59,6 +60,13 @@ struct TodayView: View {
         }
         .sheet(item: $exportedText) { ShareSheet(items: [$0.text]) }
         .sheet(isPresented: $showFoodAdd) { FoodAddSheet(mealKey: foodAddMeal) }
+        .sheet(isPresented: $showCheckIn) {
+            // `initial` is read at presentation time, so History navigation backfills the viewed day.
+            CheckInSheet(initial: store.draft.checkIn) { c in
+                store.updateCheckIn(c)
+                Task { await store.computeReadiness(for: store.date, health: health) }
+            }
+        }
         .fullScreenCover(isPresented: $showFocus) { FocusScreenView() }
         .task { await store.refreshSuggestion() }
         .task { prayer.start() }
@@ -434,6 +442,7 @@ struct TodayView: View {
                             }
                         }
                     }
+                    checkInRow
                     let trend = store.recentScores(days: 14).readiness
                     if trend.count >= 2 {
                         VStack(alignment: .leading, spacing: 4) {
@@ -447,6 +456,32 @@ struct TodayView: View {
                 }
             }
             .padding(.top, 14)
+        }
+    }
+
+    /// Self-report entry point + the sensor-only transparency line, so an adjusted score is never a mystery.
+    private var checkInRow: some View {
+        let done = store.draft.checkIn != DayCheckIn()
+        return VStack(alignment: .leading, spacing: 6) {
+            if store.readinessSensorOnly > 0 {
+                Text("Sensor-only readiness: \(store.readinessSensorOnly) · adjusted by your check-in")
+                    .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+            }
+            Button { showCheckIn = true } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: done ? "checkmark.circle.fill" : "square.and.pencil")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(done ? "Check-in logged" : "How do you feel?")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(done ? .white : Theme.accentDark)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(
+                    Capsule().fill(done ? Theme.accentDark : Theme.accentDark.opacity(0.12))
+                        .overlay(Capsule().strokeBorder(Theme.accentDark.opacity(done ? 0 : 0.3), lineWidth: 0.5))
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 

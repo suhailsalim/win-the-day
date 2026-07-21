@@ -26,7 +26,8 @@ Bands: green (ready to push), amber (moderate), red (take it easy).
   Health history the app imports the last 30 days on first launch so you're calibrated on day one.
 - The optional **daily check-in** (soreness, stress, mood, alcohol, late caffeine, illness) sharpens
   Readiness within honest bounds — and the sensor-only number stays visible so you always see what
-  the sensors said before your check-in adjusted it.
+  the sensors said before your check-in adjusted it. Tap **How do you feel?** on the Sleep &
+  readiness card to log it; you can also backfill a past day from History.
 
 ## Active score (0–100)
 
