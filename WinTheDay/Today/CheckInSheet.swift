@@ -87,7 +87,7 @@ struct CheckInSheet: View {
                     let on = value.wrappedValue == idx
                     Button { value.wrappedValue = idx } label: {
                         Text(word).font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(on ? .white : Theme.ink)
+                            .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                             .lineLimit(1).minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity).padding(.vertical, 9)
                             .background(on ? Theme.accentDark : Color.clear)
@@ -95,8 +95,8 @@ struct CheckInSheet: View {
                     .buttonStyle(.plain)
                 }
             }
-            .background(Color.white.opacity(0.5)).clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+            .background(Theme.surfaceOverlay).clipShape(Capsule())
+            .overlay(Capsule().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
         }
     }
 }

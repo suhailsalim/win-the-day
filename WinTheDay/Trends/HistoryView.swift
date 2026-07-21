@@ -92,7 +92,7 @@ struct HistoryView: View {
                     Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
                 }.buttonStyle(.plain).padding(.trailing, 4)
             }
-            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
         }
         .padding(.horizontal, 16).padding(.vertical, 11)
     }
@@ -159,7 +159,7 @@ struct PhotoCompareView: View {
     }
 
     private func tag(_ s: String) -> some View {
-        Text(s).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+        Text(s).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.onAccent)
             .padding(.horizontal, 8).padding(.vertical, 4)
             .background(Capsule().fill(.black.opacity(0.4)))
     }

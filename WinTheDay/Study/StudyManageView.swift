@@ -13,6 +13,10 @@ struct StudyManageView: View {
 
     private var vocab: WorkVocab { store.workVocab }
 
+    /// The study/work module hue. No Theme token owns it, so it is wrapped inline and lifted for
+    /// dark — 0x5B43E0 is near-invisible on charcoal.
+    private var studyPurple: Color { Theme.adaptive(light: 0x5B43E0, darkGrey: 0x9E8FFF) }
+
     private var modeCard: some View {
         HStack(spacing: 0) {
             ForEach(["study", "work"], id: \.self) { mode in
@@ -20,9 +24,9 @@ struct StudyManageView: View {
                 Button { store.updateTargets { $0.workMode = mode } } label: {
                     Text(mode == "study" ? "Study" : "Work")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(on ? .white : Theme.ink)
+                        .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                         .frame(maxWidth: .infinity).padding(.vertical, 11)
-                        .background(on ? Color(hex: 0x5B43E0) : Color.clear)
+                        .background(on ? studyPurple : Color.clear)
                 }
                 .buttonStyle(.plain)
             }
@@ -66,15 +70,15 @@ struct StudyManageView: View {
             ForEach(store.data.countdowns) { cd in
                 HStack {
                     Image(systemName: cd.kind == "work" ? "flag.checkered" : "graduationcap.fill")
-                        .foregroundStyle(Color(hex: 0x5B43E0))
+                        .foregroundStyle(studyPurple)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(cd.name).font(.system(size: 15)).foregroundStyle(Theme.ink)
                         Text(cd.date, format: .dateTime.day().month().year()).font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
                     }
                     Spacer()
-                    Text("\(max(0, store.days(until: cd.date)))d").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0x5B43E0))
+                    Text("\(max(0, store.days(until: cd.date)))d").font(.system(size: 14, weight: .semibold)).foregroundStyle(studyPurple)
                     Button { store.deleteCountdown(cd.id) } label: {
-                        Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Color(hex: 0xD86B4A))
+                        Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Theme.coral)
                     }.buttonStyle(.plain).padding(.leading, 8)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 11)
@@ -86,13 +90,13 @@ struct StudyManageView: View {
                     Button { newCdKind = k } label: {
                         Text(k == "study" ? "Exam/study" : "Deadline/work")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(newCdKind == k ? .white : Theme.ink)
+                            .foregroundStyle(newCdKind == k ? Theme.onAccent : Theme.ink)
                             .frame(maxWidth: .infinity).padding(.vertical, 8)
-                            .background(newCdKind == k ? Color(hex: 0x5B43E0) : Color.clear)
+                            .background(newCdKind == k ? studyPurple : Color.clear)
                     }.buttonStyle(.plain)
                 }
             }
-            .clipShape(Capsule()).overlay(Capsule().strokeBorder(Color(hex: 0x5B43E0).opacity(0.3), lineWidth: 0.5))
+            .clipShape(Capsule()).overlay(Capsule().strokeBorder(studyPurple.opacity(0.3), lineWidth: 0.5))
             .padding(.horizontal, 16).padding(.top, 12)
             HStack {
                 TextField(newCdKind == "work" ? "e.g. Q3 launch" : "e.g. NEET PG", text: $newCdName).font(.system(size: 15))
@@ -104,7 +108,7 @@ struct StudyManageView: View {
                 if !t.isEmpty { store.addCountdown(name: t, date: newCdDate, kind: newCdKind); newCdName = "" }
             } label: {
                 Label("Add countdown", systemImage: "plus.circle.fill")
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0x5B43E0))
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(studyPurple)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
             }.buttonStyle(.plain)
         }
@@ -121,15 +125,15 @@ struct StudyManageView: View {
                 TextField(store.targets.workMode == "work" ? "What are you working on? (optional)" : "What are you studying? (optional)", text: $sessionSubject)
                     .font(.system(size: 15)).foregroundStyle(Theme.ink)
                     .padding(.horizontal, 12).padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5)))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay))
                 if !store.data.subjects.isEmpty {
                     FlowLayout(spacing: 8) {
                         ForEach(store.data.subjects) { s in
                             Button { sessionSubject = s.name } label: {
                                 Text(s.name).font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(Color(hex: 0x5B43E0))
+                                    .foregroundStyle(studyPurple)
                                     .padding(.horizontal, 12).padding(.vertical, 7)
-                                    .background(Capsule().fill(Color(hex: 0x6FA8FF).opacity(0.18)))
+                                    .background(Capsule().fill(Theme.adaptive(light: 0x6FA8FF, darkGrey: 0x8FC4FF).opacity(0.18)))
                             }.buttonStyle(.plain)
                         }
                     }
@@ -139,9 +143,9 @@ struct StudyManageView: View {
                     dismiss()
                 } label: {
                     Label("Start timer", systemImage: "play.fill")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background(RoundedRectangle(cornerRadius: 13).fill(Color(hex: 0x5B43E0)))
+                        .background(RoundedRectangle(cornerRadius: 13).fill(studyPurple))
                 }.buttonStyle(.plain)
             }
         }
@@ -159,7 +163,7 @@ struct StudyManageView: View {
                 Button { store.updateTargets { $0.studyHours += 1 } } label: { Image(systemName: "plus").frame(width: 38, height: 32) }
             }
             .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.accentDark)
-            .background(Capsule().fill(Color.white.opacity(0.6)))
+            .background(Capsule().fill(Theme.surfaceOverlay))
         }
         .padding(.horizontal, 16).padding(.vertical, 10).glassList()
     }
@@ -178,12 +182,12 @@ struct StudyManageView: View {
                 HStack {
                     Button { store.toggleSubject(s.id) } label: {
                         Image(systemName: s.done ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(s.done ? Theme.sage : Color(white: 0.47).opacity(0.3))
+                            .foregroundStyle(s.done ? Theme.sage : Theme.tertiaryInk.opacity(0.3))
                     }.buttonStyle(.plain)
                     Text(s.name).font(.system(size: 15)).foregroundStyle(Theme.ink).strikethrough(s.done)
                     Spacer()
                     Button { store.deleteSubject(s.id) } label: {
-                        Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Color(hex: 0xD86B4A))
+                        Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(Theme.coral)
                     }.buttonStyle(.plain)
                 }.padding(.horizontal, 16).padding(.vertical, 11)
             }

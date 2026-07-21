@@ -42,14 +42,16 @@ struct PlanView: View {
             }
         } label: {
             HStack(spacing: 9) {
-                Image(systemName: "wand.and.stars").foregroundStyle(.white)
-                Text("Generate my week with AI").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                Image(systemName: "wand.and.stars").foregroundStyle(Theme.onAccent)
+                Text("Generate my week with AI").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.onAccent)
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(.white.opacity(0.7))
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.onAccent.opacity(0.7))
             }
             .padding(.horizontal, 16).padding(.vertical, 14)
             .background(RoundedRectangle(cornerRadius: 16).fill(LinearGradient(
-                colors: [Color(hex: 0x6E7BFF), Color(hex: 0x5B43E0)], startPoint: .leading, endPoint: .trailing)))
+                colors: [Theme.adaptive(light: 0x6E7BFF, darkGrey: 0x7C87FF),
+                         Theme.adaptive(light: 0x5B43E0, darkGrey: 0x6D57E8)],
+                startPoint: .leading, endPoint: .trailing)))
         }
         .buttonStyle(.plain)
         .padding(.top, 12)
@@ -70,7 +72,7 @@ struct PlanView: View {
     // MARK: - Week outlook
 
     private var outlookCard: some View {
-        GlassCard(padding: 16, cornerRadius: 22, tint: .white.opacity(0.5)) {
+        GlassCard(padding: 16, cornerRadius: 22, tint: Theme.surfaceOverlay) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     HStack(spacing: 7) {
@@ -113,11 +115,11 @@ struct PlanView: View {
                 VStack(spacing: 4) {
                     Text(shortWeekday(day)).font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.tertiaryInk)
                     ZStack {
-                        Circle().fill(won ? Theme.sage : (logged ? Theme.accent.opacity(0.5) : Color(white: 0.5).opacity(0.12)))
+                        Circle().fill(won ? Theme.sage : (logged ? Theme.accent.opacity(0.5) : Theme.tertiaryInk.opacity(0.12)))
                             .frame(width: 26, height: 26)
-                        if won { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white) }
+                        if won { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.onAccent) }
                         else if isPast && !logged { Image(systemName: "minus").font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.tertiaryInk) }
-                        else { Text("\(cal.component(.day, from: day))").font(.system(size: 11, weight: .semibold)).foregroundStyle(logged ? .white : Theme.secondaryInk) }
+                        else { Text("\(cal.component(.day, from: day))").font(.system(size: 11, weight: .semibold)).foregroundStyle(logged ? Theme.onAccent : Theme.secondaryInk) }
                     }
                     .overlay(Circle().strokeBorder(Theme.accentDark, lineWidth: isToday ? 1.5 : 0).frame(width: 30, height: 30))
                 }
@@ -170,7 +172,7 @@ struct PlanView: View {
 
     private func planRow(symbol: String, title: String, detail: String) -> some View {
         HStack(spacing: 11) {
-            IconTile(symbol: symbol, colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 28, corner: 8)
+            IconTile(symbol: symbol, colors: [Theme.accent, Theme.accentDark], size: 28, corner: 8)
             Text(title).font(.system(size: 15)).foregroundStyle(Theme.ink)
             Spacer()
             Text(detail).font(.system(size: 12.5)).foregroundStyle(Theme.tertiaryInk)
@@ -208,7 +210,7 @@ struct PlanView: View {
                             }.buttonStyle(.plain)
                             Button { editSession = s } label: {
                                 HStack(spacing: 11) {
-                                    IconTile(symbol: ScheduledSession.symbol(s.kind), colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 28, corner: 8)
+                                    IconTile(symbol: ScheduledSession.symbol(s.kind), colors: [Theme.accent, Theme.accentDark], size: 28, corner: 8)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(s.title.isEmpty ? ScheduledSession.label(s.kind) : s.title).font(.system(size: 15)).foregroundStyle(Theme.ink)
                                         Text("\(AppStore.shortDate(s.date)) \(timeStr(s.date))\(s.withPT ? " · PT" : "")").font(.system(size: 12.5)).foregroundStyle(Theme.tertiaryInk)
@@ -258,7 +260,7 @@ struct PlanView: View {
                     ForEach(Array(occ.prefix(8).enumerated()), id: \.element.id) { idx, o in
                         Button { editOccasion = o } label: {
                             HStack(spacing: 11) {
-                                IconTile(symbol: Occasion.symbol(o.type), colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 28, corner: 8)
+                                IconTile(symbol: Occasion.symbol(o.type), colors: [Theme.accent, Theme.accentDark], size: 28, corner: 8)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(o.title).font(.system(size: 15)).foregroundStyle(Theme.ink)
                                     if !o.checklist.isEmpty {
@@ -286,7 +288,7 @@ struct PlanView: View {
                 Image(systemName: "repeat").foregroundStyle(Theme.accentDark)
                 Text("Edit weekly routine").font(.system(size: 16)).foregroundStyle(Theme.ink)
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
             }
             .padding(.horizontal, 16).padding(.vertical, 13).glassList()
         }

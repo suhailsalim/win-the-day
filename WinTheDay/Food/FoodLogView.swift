@@ -233,7 +233,7 @@ struct FoodAddSheet: View {
             Text("Not in your library or the database yet.").font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
             Button { Task { searchingOnline = true; onlineResults = await store.searchFoodOnline(query); searchingOnline = false } } label: {
                 Label("Search Open Food Facts", systemImage: "globe").font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white).padding(.horizontal, 16).padding(.vertical, 9)
+                    .foregroundStyle(Theme.onAccent).padding(.horizontal, 16).padding(.vertical, 9)
                     .background(Capsule().fill(Theme.accentDark))
             }.buttonStyle(.plain)
         }.padding(14).frame(maxWidth: .infinity).glassList()
@@ -265,7 +265,7 @@ struct FoodAddSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             TextField("Optional hint, e.g. \u{201C}the curry is fish\u{201D}", text: $photoCaption, axis: .vertical)
                 .font(.system(size: 15)).padding(.horizontal, 12).padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay))
             if photoParsing {
                 HStack(spacing: 8) {
                     ProgressView()
@@ -286,7 +286,7 @@ struct FoodAddSheet: View {
             Label(title, systemImage: symbol)
                 .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
                 .frame(maxWidth: .infinity).padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.6))
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay)
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.accent.opacity(0.4), lineWidth: 0.5)))
         }.buttonStyle(.plain)
     }
@@ -310,7 +310,7 @@ struct FoodAddSheet: View {
                 .font(.system(size: 11.5)).foregroundStyle(Theme.tertiaryInk)
             TextField("e.g. 2 dosa, sambar and a filter coffee", text: $nlText, axis: .vertical)
                 .font(.system(size: 15)).padding(.horizontal, 12).padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay))
             Button {
                 let t = nlText
                 Task { parsing = true; _ = try? await store.logMealText(t, mealKey: mealKey); parsing = false; nlText = ""; dismiss() }
@@ -318,7 +318,7 @@ struct FoodAddSheet: View {
                 HStack(spacing: 6) {
                     if parsing { ProgressView().tint(.white) }
                     Text(parsing ? "Reading…" : "Add from description")
-                }.font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                }.font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 11)
                     .background(RoundedRectangle(cornerRadius: 13).fill(Theme.accentDark))
             }.buttonStyle(.plain).disabled(parsing || nlText.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -349,7 +349,7 @@ struct MealPhotoReviewSheet: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         if !note.isEmpty {
-                            Text(note).font(.system(size: 13)).foregroundStyle(Color(hex: 0xD86B4A))
+                            Text(note).font(.system(size: 13)).foregroundStyle(Theme.coral)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(14).glassList()
                         }

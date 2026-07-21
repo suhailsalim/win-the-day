@@ -52,14 +52,15 @@ struct HealthView: View {
     private var biologyCard: some View {
         Button { showBiology = true } label: {
             HStack(spacing: 12) {
-                IconTile(symbol: "chart.xyaxis.line", colors: [Color(hex: 0x5FE08A), Color(hex: 0x16B45A)])
+                IconTile(symbol: "chart.xyaxis.line", colors: [Theme.adaptive(light: 0x5FE08A, darkGrey: 0x84EAA6),
+                                                               Theme.adaptive(light: 0x16B45A, darkGrey: 0x3FD182)])
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Biology").font(.system(size: 16)).foregroundStyle(Theme.ink)
                     Text(biologySubtitle).font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(Color(white: 0.27).opacity(0.3))
+                    .foregroundStyle(Theme.quaternaryInk)
             }
             .padding(.horizontal, 16).padding(.vertical, 13)
         }
@@ -87,7 +88,8 @@ struct HealthView: View {
                         Button { editNote = n } label: {
                             HStack(spacing: 12) {
                                 IconTile(symbol: HealthNote.symbol(n.category),
-                                         colors: [Color(hex: 0x9D8CFF), Color(hex: 0x5B43E0)], size: 30, corner: 9)
+                                         colors: [Theme.adaptive(light: 0x9D8CFF, darkGrey: 0xB7ABFF),
+                                                  Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8471F2)], size: 30, corner: 9)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(n.title.isEmpty ? HealthNote.label(n.category) : n.title)
                                         .font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink)
@@ -98,7 +100,7 @@ struct HealthView: View {
                                     }
                                 }
                                 Spacer()
-                                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
                             }
                             .padding(.horizontal, 16).padding(.vertical, 11)
                         }.buttonStyle(.plain)
@@ -114,11 +116,15 @@ struct HealthView: View {
 
     private var importSection: some View {
         VStack(spacing: 0) {
-            importRow("InBody / body composition", "figure.arms.open", colors: [Color(hex: 0x7AC0FF), Color(hex: 0x1E8AE0)]) {
+            importRow("InBody / body composition", "figure.arms.open",
+                      colors: [Theme.adaptive(light: 0x7AC0FF, darkGrey: 0x9BD2FF),
+                               Theme.adaptive(light: 0x1E8AE0, darkGrey: 0x5AB0F0)]) {
                 importMode = .bodyComp
             }
             Hairline()
-            importRow("Health checkup / labs", "doc.text.magnifyingglass", colors: [Color(hex: 0x9D8CFF), Color(hex: 0x5B43E0)]) {
+            importRow("Health checkup / labs", "doc.text.magnifyingglass",
+                      colors: [Theme.adaptive(light: 0x9D8CFF, darkGrey: 0xB7ABFF),
+                               Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8471F2)]) {
                 importMode = .labs
             }
         }
@@ -178,10 +184,11 @@ struct HealthView: View {
     // MARK: - Connect banner
 
     private var banner: some View {
-        GlassCard(padding: 16, cornerRadius: 24, tint: .white.opacity(0.46)) {
+        GlassCard(padding: 16, cornerRadius: 24, tint: Theme.surfaceOverlay) {
             VStack(spacing: 13) {
                 HStack(spacing: 12) {
-                    IconTile(symbol: "heart.fill", colors: [Color(hex: 0xFF5E7A), Color(hex: 0xFB1E4B)],
+                    IconTile(symbol: "heart.fill", colors: [Theme.adaptive(light: 0xFF5E7A, darkGrey: 0xFF8398),
+                                                            Theme.adaptive(light: 0xFB1E4B, darkGrey: 0xFF5A79)],
                              size: 44, corner: 13)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(statusTitle).font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.ink)
@@ -220,12 +227,12 @@ struct HealthView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 14.5, weight: .semibold))
-                .foregroundStyle(filled ? .white : Theme.accentDark)
+                .foregroundStyle(filled ? Theme.onAccent : Theme.accentDark)
                 .frame(maxWidth: .infinity).padding(.vertical, 11)
                 .background(
                     RoundedRectangle(cornerRadius: 13, style: .continuous)
                         .fill(filled
-                              ? AnyShapeStyle(LinearGradient(colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)],
+                              ? AnyShapeStyle(LinearGradient(colors: [Theme.accent, Theme.accentDark],
                                                              startPoint: .top, endPoint: .bottom))
                               : AnyShapeStyle(Theme.accent.opacity(0.16)))
                 )
@@ -238,21 +245,29 @@ struct HealthView: View {
     private var metricsGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
             metric("Steps", value: intStr(health.stepsToday), unit: "today",
-                   symbol: "figure.walk", colors: [Color(hex: 0xFF9E6B), Color(hex: 0xF4631E)])
+                   symbol: "figure.walk", colors: [Theme.adaptive(light: 0xFF9E6B, darkGrey: 0xFFB78E),
+                                                   Theme.adaptive(light: 0xF4631E, darkGrey: 0xFF8A50)])
             metric("Active energy", value: intStr(health.activeEnergyToday), unit: "kcal today",
-                   symbol: "flame.fill", colors: [Color(hex: 0xFF6FA0), Color(hex: 0xFB1E5B)])
+                   symbol: "flame.fill", colors: [Theme.adaptive(light: 0xFF6FA0, darkGrey: 0xFF92B7),
+                                                  Theme.adaptive(light: 0xFB1E5B, darkGrey: 0xFF5C88)])
             metric("Body mass", value: health.latestWeight > 0 ? String(format: "%.1f", health.latestWeight) : "—",
-                   unit: "kg latest", symbol: "figure.stand", colors: [Color(hex: 0x7AC0FF), Color(hex: 0x1E8AE0)])
+                   unit: "kg latest", symbol: "figure.stand", colors: [Theme.adaptive(light: 0x7AC0FF, darkGrey: 0x9BD2FF),
+                                                                       Theme.adaptive(light: 0x1E8AE0, darkGrey: 0x5AB0F0)])
             metric("Resting HR", value: health.restingHR > 0 ? intStr(health.restingHR) : "—", unit: "bpm",
-                   symbol: "heart.fill", colors: [Color(hex: 0xFF5E7A), Color(hex: 0xFB1E4B)])
+                   symbol: "heart.fill", colors: [Theme.adaptive(light: 0xFF5E7A, darkGrey: 0xFF8398),
+                                                  Theme.adaptive(light: 0xFB1E4B, darkGrey: 0xFF5A79)])
             metric("HRV", value: health.hrv > 0 ? intStr(health.hrv) : "—", unit: "ms SDNN",
-                   symbol: "waveform.path.ecg", colors: [Color(hex: 0x9D8CFF), Color(hex: 0x5B43E0)])
+                   symbol: "waveform.path.ecg", colors: [Theme.adaptive(light: 0x9D8CFF, darkGrey: 0xB7ABFF),
+                                                         Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8471F2)])
             metric("Sleep", value: health.sleepHours > 0 ? String(format: "%.1f", health.sleepHours) : "—",
-                   unit: "h last night", symbol: "moon.fill", colors: [Color(hex: 0x6E7BFF), Color(hex: 0x3B43C0)])
+                   unit: "h last night", symbol: "moon.fill", colors: [Theme.adaptive(light: 0x6E7BFF, darkGrey: 0x929CFF),
+                                                                       Theme.adaptive(light: 0x3B43C0, darkGrey: 0x6D74E0)])
             metric("Workouts", value: "\(health.workoutsThisWeek)", unit: "this week",
-                   symbol: "dumbbell.fill", colors: [Color(hex: 0x5FE08A), Color(hex: 0x16B45A)])
+                   symbol: "dumbbell.fill", colors: [Theme.adaptive(light: 0x5FE08A, darkGrey: 0x84EAA6),
+                                                     Theme.adaptive(light: 0x16B45A, darkGrey: 0x3FD182)])
             metric("Logged today", value: loggedCals, unit: "kcal → Health",
-                   symbol: "square.and.arrow.up", colors: [Color(hex: 0xFFC36B), Color(hex: 0xF0961E)])
+                   symbol: "square.and.arrow.up", colors: [Theme.adaptive(light: 0xFFC36B, darkGrey: 0xFFD394),
+                                                           Theme.adaptive(light: 0xF0961E, darkGrey: 0xFFB44F)])
         }
         .padding(.top, 2)
     }
@@ -279,8 +294,8 @@ struct HealthView: View {
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .overlay(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.5)))
-                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+                .overlay(RoundedRectangle(cornerRadius: 18).fill(Theme.surfaceOverlay))
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
         )
     }
 
@@ -290,7 +305,7 @@ struct HealthView: View {
 
     private var footer: some View {
         Text("Data stays on your device. Win the Day reads it locally with your permission and writes your logged calories & protein back. Manage exactly what\u{2019}s shared in Apple Health → Sharing → Apps.")
-            .font(.system(size: 12)).foregroundStyle(Color(white: 0.27).opacity(0.45))
+            .font(.system(size: 12)).foregroundStyle(Theme.quaternaryInk)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 16).padding(.top, 18)
     }

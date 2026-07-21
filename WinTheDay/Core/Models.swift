@@ -1352,6 +1352,31 @@ extension HabitDef {
 
 // MARK: - Settings
 
+/// Which colour scheme the app renders in. `.system` follows iOS (the default).
+/// Lives here rather than in UI/Theme.swift so the Foundation-only test package can see it;
+/// the SwiftUI `colorScheme` bridge is an extension in Theme.swift.
+enum ThemeMode: String, Codable, CaseIterable, Sendable {
+    case system, light, dark
+
+    var label: String {
+        switch self {
+        case .system: return "System"
+        case .light:  return "Light"
+        case .dark:   return "Dark"
+        }
+    }
+}
+
+/// Which flavour of dark. Only consulted when the resolved scheme is dark.
+enum DarkStyle: String, Codable, CaseIterable, Sendable {
+    case grey, black
+
+    var label: String { self == .grey ? "Grey" : "Black" }
+    var note: String {
+        self == .grey ? "Soft charcoal surfaces" : "True black — saves power on OLED"
+    }
+}
+
 struct AppSettings: Codable, Equatable {
     var provider = "anthropic"
     var model = "sonnet46"
@@ -1363,6 +1388,16 @@ struct AppSettings: Codable, Equatable {
     var calendarSync = false
     var remindersSync = false
     var visibleRingCount = 4        // 3 or 4 — how many rings show in the Today ring row
+
+    // Appearance (palette in UI/Theme.swift + Managers/ThemeController.swift). Stored as raw strings so an
+    // unknown value written by a newer build falls back instead of throwing. Liquid glass has no
+    // setting here on purpose — it follows iOS Accessibility → Reduce Transparency.
+    var themeMode = ThemeMode.system.rawValue
+    var darkStyle = DarkStyle.grey.rawValue
+
+    var theme: ThemeMode { ThemeMode(rawValue: themeMode) ?? .system }
+    var dark: DarkStyle { DarkStyle(rawValue: darkStyle) ?? .grey }
+
     // App lock (Face ID / Touch ID with device-passcode fallback) — see AppLock.
     var appLockEnabled = false
     var appLockGraceMinutes = 1     // minutes backgrounded before the lock re-arms
@@ -1402,6 +1437,11 @@ struct AppSettings: Codable, Equatable {
         remindersSync = (try? c.decode(Bool.self, forKey: .remindersSync)) ?? false
         let ringCount = (try? c.decode(Int.self, forKey: .visibleRingCount)) ?? 4
         visibleRingCount = min(4, max(3, ringCount))
+        // Unknown/typo'd appearance values fall back to the defaults rather than throwing.
+        let mode = (try? c.decode(String.self, forKey: .themeMode)) ?? ThemeMode.system.rawValue
+        themeMode = (ThemeMode(rawValue: mode) ?? .system).rawValue
+        let dk = (try? c.decode(String.self, forKey: .darkStyle)) ?? DarkStyle.grey.rawValue
+        darkStyle = (DarkStyle(rawValue: dk) ?? .grey).rawValue
         appLockEnabled = (try? c.decode(Bool.self, forKey: .appLockEnabled)) ?? false
         let grace = (try? c.decode(Int.self, forKey: .appLockGraceMinutes)) ?? 1
         appLockGraceMinutes = AppSettings.appLockGraceOptions.contains(grace) ? grace : 1

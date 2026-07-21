@@ -49,14 +49,14 @@ struct RoutineEditorView: View {
 
     private func row(_ b: RoutineBlock) -> some View {
         HStack(spacing: 11) {
-            IconTile(symbol: ScheduledSession.symbol(b.kind), colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 30, corner: 9)
+            IconTile(symbol: ScheduledSession.symbol(b.kind), colors: [Theme.accent, Theme.accentDark], size: 30, corner: 9)
             VStack(alignment: .leading, spacing: 2) {
                 Text(b.title.isEmpty ? ScheduledSession.label(b.kind) : b.title).font(.system(size: 15.5, weight: .medium)).foregroundStyle(Theme.ink)
                 Text("\(weekdayNames[b.weekday]) · \(String(format: "%02d:%02d", b.hour, b.minute)) · \(b.durationMin)m\(b.withPT ? " · PT" : "")")
                     .font(.system(size: 12.5)).foregroundStyle(Theme.tertiaryInk)
             }
             Spacer()
-            Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+            Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
         }
         .padding(.horizontal, 16).padding(.vertical, 11)
     }
@@ -148,9 +148,9 @@ struct RoutineBlockEditor: View {
                             Image(systemName: k.symbol).font(.system(size: 15))
                             Text(k.label).font(.system(size: 10, weight: .semibold))
                         }
-                        .foregroundStyle(on ? .white : Theme.ink)
+                        .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                         .frame(width: 76).padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: 13).fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Color.white.opacity(0.55))))
+                        .background(RoundedRectangle(cornerRadius: 13).fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay)))
                     }.buttonStyle(.plain)
                 }
             }

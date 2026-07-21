@@ -33,7 +33,8 @@ struct QuranModuleView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 13) {
                     IconTile(symbol: "book.closed.fill",
-                             colors: [Color(hex: 0x4FA383), Color(hex: 0x2F7D5E)], size: 36, corner: 11)
+                             colors: [Theme.adaptive(light: 0x4FA383, darkGrey: 0x5CB496),
+                                      Theme.adaptive(light: 0x2F7D5E, darkGrey: 0x3C946F)], size: 36, corner: 11)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(pages == 0 ? "No pages logged yet" : "\(pages) page\(pages == 1 ? "" : "s") today")
                             .font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
@@ -66,10 +67,11 @@ struct QuranModuleView: View {
     private func pageButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0x2F7D5E))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.adaptive(light: 0x2F7D5E, darkGrey: 0x5FBE95))
                 .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(Color(hex: 0x4FA383).opacity(0.18))
-                    .overlay(Capsule().strokeBorder(Color(hex: 0x2F7D5E).opacity(0.35), lineWidth: 0.5)))
+                .background(Capsule().fill(Theme.adaptive(light: 0x4FA383, darkGrey: 0x5FBE95).opacity(0.18))
+                    .overlay(Capsule().strokeBorder(Theme.adaptive(light: 0x2F7D5E, darkGrey: 0x5FBE95).opacity(0.35), lineWidth: 0.5)))
         }
         .buttonStyle(.plain)
     }
@@ -87,8 +89,8 @@ struct QuranModuleView: View {
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color(white: 0.5).opacity(0.15)).frame(height: 8)
-                    Capsule().fill(s.isComplete ? Theme.sage : Color(hex: 0x2F7D5E))
+                    Capsule().fill(Theme.tertiaryInk.opacity(0.15)).frame(height: 8)
+                    Capsule().fill(s.isComplete ? Theme.sage : Theme.adaptive(light: 0x2F7D5E, darkGrey: 0x5FBE95))
                         .frame(width: geo.size.width * s.fraction, height: 8)
                 }
             }
@@ -250,9 +252,9 @@ struct KhatmahSetupView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(on ? .white : Theme.ink)
+                .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                 .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(Capsule().fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Color.white.opacity(0.5)))
+                .background(Capsule().fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay))
                     .overlay(Capsule().strokeBorder(Theme.accent.opacity(on ? 0 : 0.35), lineWidth: 0.5)))
         }
         .buttonStyle(.plain)

@@ -70,9 +70,9 @@ struct RegimenEditorView: View {
                 let pct = Int((Double(a.taken) / Double(a.scheduled) * 100).rounded())
                 Text("\(pct)%")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(pct < 80 ? Color(hex: 0xD86B4A) : Theme.sage)
+                    .foregroundStyle(pct < 80 ? Theme.coral : Theme.sage)
             }
-            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
@@ -254,9 +254,9 @@ struct RegimenDetailView: View {
         Button(action: action) {
             Text(text)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(on ? .white : Theme.secondaryInk)
+                .foregroundStyle(on ? Theme.onAccent : Theme.secondaryInk)
                 .padding(.horizontal, 13).padding(.vertical, 7)
-                .background(Capsule().fill(on ? Theme.accentDark : Color(white: 0.47).opacity(0.12)))
+                .background(Capsule().fill(on ? Theme.accentDark : Theme.tertiaryInk.opacity(0.12)))
         }
         .buttonStyle(.plain)
     }

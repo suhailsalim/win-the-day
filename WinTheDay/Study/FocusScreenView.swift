@@ -54,22 +54,22 @@ struct FocusScreenView: View {
                 .font(.system(size: 16)).foregroundStyle(Theme.ink)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 14).padding(.vertical, 12)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.55)))
+                .background(RoundedRectangle(cornerRadius: 14).fill(Theme.surfaceOverlay))
 
             HStack(spacing: 8) {
                 ForEach(Self.presets, id: \.self) { m in
                     Button { durationMin = m } label: {
                         Text("\(m)m").font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(durationMin == m ? .white : Theme.ink)
+                            .foregroundStyle(durationMin == m ? Theme.onAccent : Theme.ink)
                             .frame(maxWidth: .infinity).padding(.vertical, 10)
-                            .background(Capsule().fill(durationMin == m ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Color.white.opacity(0.5))))
+                            .background(Capsule().fill(durationMin == m ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay)))
                     }.buttonStyle(.plain)
                 }
             }
 
             Button { start() } label: {
                 Label("Start focusing", systemImage: "play.fill")
-                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
                     .background(RoundedRectangle(cornerRadius: 16).fill(Theme.accentDark))
             }.buttonStyle(.plain).disabled(taskName.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -93,12 +93,12 @@ struct FocusScreenView: View {
                     }.buttonStyle(.plain)
                 }
                 .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.45)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay))
             }
             HStack {
                 TextField("Add a task to queue", text: $newTaskText)
                     .font(.system(size: 14)).padding(.horizontal, 10).padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.4)))
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.surfaceOverlay))
                 Button {
                     store.addFocusTask(newTaskText); newTaskText = ""
                 } label: { Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(Theme.accentDark) }
@@ -129,7 +129,7 @@ struct FocusScreenView: View {
                 .frame(maxWidth: .infinity).padding(.vertical, 13)
                 .background(RoundedRectangle(cornerRadius: 14).fill(Theme.accent.opacity(0.18)))
                 Button("Done") { finish() }
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                     .background(RoundedRectangle(cornerRadius: 14).fill(Theme.accentDark))
             }

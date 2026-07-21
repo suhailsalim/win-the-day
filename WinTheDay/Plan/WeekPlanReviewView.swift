@@ -59,7 +59,7 @@ struct WeekPlanReviewView: View {
                 ForEach(Array(blocks.enumerated()), id: \.element.id) { idx, b in
                     HStack(spacing: 11) {
                         IconTile(symbol: ScheduledSession.symbol(AppStore.displayKind(b.kind)),
-                                 colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 28, corner: 8)
+                                 colors: [Theme.accent, Theme.accentDark], size: 28, corner: 8)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(b.title.isEmpty ? ScheduledSession.label(b.kind) : b.title)
                                 .font(.system(size: 15)).foregroundStyle(b.enabled ? Theme.ink : Theme.tertiaryInk)

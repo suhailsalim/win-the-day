@@ -44,7 +44,7 @@ struct ImportReportView: View {
                         if let compResult { bodyCompResultCard(compResult) }
                         if let labResult { labsResultCard(labResult) }
                         if !error.isEmpty {
-                            Text(error).font(.system(size: 13)).foregroundStyle(Color(hex: 0xD86B4A))
+                            Text(error).font(.system(size: 13)).foregroundStyle(Theme.coral)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.top, 12)
                         }
                     }
@@ -105,17 +105,17 @@ struct ImportReportView: View {
             TextField("Optional notes / paste values", text: $text, axis: .vertical)
                 .font(.system(size: 15)).foregroundStyle(Theme.ink)
                 .padding(.horizontal, 12).padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.6), lineWidth: 0.5)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay)
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.surfaceStroke, lineWidth: 0.5)))
             Button { Task { await parse() } } label: {
                 HStack(spacing: 6) {
                     if parsing { ProgressView().tint(.white) }
                     Text(parsing ? "Reading report…" : "Read & save to Health")
                 }
-                .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                 .frame(maxWidth: .infinity).padding(.vertical, 12)
                 .background(RoundedRectangle(cornerRadius: 13)
-                    .fill(LinearGradient(colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)], startPoint: .top, endPoint: .bottom)))
+                    .fill(LinearGradient(colors: [Theme.accent, Theme.accentDark], startPoint: .top, endPoint: .bottom)))
             }
             .buttonStyle(.plain)
             .disabled(parsing || (imageBase64 == nil && text.trimmingCharacters(in: .whitespaces).isEmpty))
@@ -130,7 +130,7 @@ struct ImportReportView: View {
             Label(title, systemImage: symbol)
                 .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.accentDark)
                 .frame(maxWidth: .infinity).padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.6))
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay)
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.accent.opacity(0.4), lineWidth: 0.5)))
         }
         .buttonStyle(.plain)
@@ -163,7 +163,7 @@ struct ImportReportView: View {
                     Spacer()
                     Text("\(trim(item.value)) \(item.unit)").font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink)
                     Image(systemName: item.written ? "heart.fill" : "tray.fill")
-                        .font(.system(size: 11)).foregroundStyle(item.written ? Color(hex: 0xFB1E4B) : Theme.tertiaryInk)
+                        .font(.system(size: 11)).foregroundStyle(item.written ? Theme.adaptive(light: 0xFB1E4B, darkGrey: 0xFF5A79) : Theme.tertiaryInk)
                 }
                 .padding(.vertical, 4)
             }

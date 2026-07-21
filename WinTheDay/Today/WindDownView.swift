@@ -93,7 +93,7 @@ struct WindDownView: View {
             HStack(spacing: 14) {
                 HStack(alignment: .firstTextBaseline, spacing: 0) {
                     Text("\(store.draftScore)").font(Theme.serif(40)).foregroundStyle(msg.color)
-                    Text("/\(store.habitTotal)").font(.system(size: 19)).foregroundStyle(Color(white: 0.27).opacity(0.4))
+                    Text("/\(store.habitTotal)").font(.system(size: 19)).foregroundStyle(Theme.quaternaryInk)
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(msg.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
@@ -169,7 +169,7 @@ struct WindDownView: View {
                 ToggleRow(on: false) { store.toggleHabit(def) }
             } else {
                 Image(systemName: "circle").font(.system(size: 22))
-                    .foregroundStyle(Color(white: 0.47).opacity(0.3))
+                    .foregroundStyle(Theme.tertiaryInk.opacity(0.3))
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 13)
@@ -217,7 +217,7 @@ struct WindDownView: View {
                     let on = value.wrappedValue == idx
                     Button { value.wrappedValue = idx } label: {
                         Text(word).font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(on ? .white : Theme.ink)
+                            .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                             .lineLimit(1).minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity).padding(.vertical, 9)
                             .background(on ? Theme.accentDark : Color.clear)
@@ -225,8 +225,8 @@ struct WindDownView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .background(Color.white.opacity(0.5)).clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+            .background(Theme.surfaceOverlay).clipShape(Capsule())
+            .overlay(Capsule().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
         }
     }
 
@@ -284,7 +284,7 @@ struct WindDownView: View {
             Button {
                 if page < 2 { withAnimation { page += 1 } } else { finish() }
             } label: {
-                Text(page < 2 ? "Next" : "Done").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                Text(page < 2 ? "Next" : "Done").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                     .background(Capsule().fill(Theme.accentDark))
             }

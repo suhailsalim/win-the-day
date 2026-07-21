@@ -11,7 +11,7 @@ struct IOSToggle: View {
         } label: {
             ZStack(alignment: isOn ? .trailing : .leading) {
                 Capsule()
-                    .fill(isOn ? onColor : Color(white: 0.47).opacity(0.18))
+                    .fill(isOn ? onColor : Theme.tertiaryInk.opacity(0.18))
                     .frame(width: 51, height: 31)
                 Circle()
                     .fill(.white)
@@ -34,7 +34,7 @@ struct ToggleRow: View {
         Button(action: action) {
             ZStack(alignment: on ? .trailing : .leading) {
                 Capsule()
-                    .fill(on ? onColor : Color(white: 0.47).opacity(0.18))
+                    .fill(on ? onColor : Theme.tertiaryInk.opacity(0.18))
                     .frame(width: 51, height: 31)
                 Circle()
                     .fill(.white)
@@ -92,7 +92,7 @@ struct ScreenTitle: View {
 struct Hairline: View {
     var body: some View {
         Rectangle()
-            .fill(Color(white: 0.27).opacity(0.1))
+            .fill(Theme.quaternaryInk.opacity(0.25))
             .frame(height: 0.5)
     }
 }
@@ -113,7 +113,7 @@ struct DatePickerSheet: View {
                         .datePickerStyle(.graphical)
                         .tint(Theme.accentDark)
                         .padding()
-                        .background(RoundedRectangle(cornerRadius: 22).fill(Color.white.opacity(0.6)))
+                        .background(RoundedRectangle(cornerRadius: 22).fill(Theme.surfaceOverlay))
                         .padding()
                     Spacer()
                 }
@@ -183,7 +183,7 @@ struct RingGaugeView: View {
 
     var body: some View {
         ZStack {
-            Circle().stroke(Color(white: 0.5).opacity(0.15), lineWidth: lineWidth)
+            Circle().stroke(Theme.tertiaryInk.opacity(0.15), lineWidth: lineWidth)
             if available {
                 Circle().trim(from: 0, to: max(0.01, min(1, fraction)))
                     .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
@@ -212,7 +212,7 @@ struct IconTile: View {
             .overlay(
                 Image(systemName: symbol)
                     .font(.system(size: size * 0.5, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.onAccent)
             )
     }
 }

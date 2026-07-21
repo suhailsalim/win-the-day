@@ -53,7 +53,7 @@ struct HabitsEditorView: View {
                 Text(h.active ? h.link.label : "Off").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
             }
             Spacer()
-            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
@@ -105,7 +105,7 @@ struct HabitDetailView: View {
                                                 Text(p.capitalized).foregroundStyle(Theme.ink)
                                                 Spacer()
                                                 Image(systemName: habit.prayerNames.contains(p) ? "checkmark.circle.fill" : "circle")
-                                                    .foregroundStyle(habit.prayerNames.contains(p) ? Theme.accentDark : Color(white: 0.27).opacity(0.3))
+                                                    .foregroundStyle(habit.prayerNames.contains(p) ? Theme.accentDark : Theme.quaternaryInk)
                                             }
                                             .font(.system(size: 16)).padding(.horizontal, 16).padding(.vertical, 10)
                                         }.buttonStyle(.plain)

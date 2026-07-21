@@ -44,7 +44,7 @@ struct TodayView: View {
 
             Text(store.draft.isMeaningful ? "Saved automatically" : "Start logging — it saves as you go")
                 .font(.system(size: 12))
-                .foregroundStyle(Color(white: 0.27).opacity(0.4))
+                .foregroundStyle(Theme.quaternaryInk)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 14)
         }
@@ -148,10 +148,10 @@ struct TodayView: View {
     private func waterButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0x1E8AE0))
+                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.adaptive(light: 0x1E8AE0, darkGrey: 0x5AB0F0))
                 .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(Color(hex: 0x6FB7FF).opacity(0.18))
-                    .overlay(Capsule().strokeBorder(Color(hex: 0x2E8AE0).opacity(0.35), lineWidth: 0.5)))
+                .background(Capsule().fill(Theme.adaptive(light: 0x6FB7FF, darkGrey: 0x8CC8FF).opacity(0.18))
+                    .overlay(Capsule().strokeBorder(Theme.adaptive(light: 0x2E8AE0, darkGrey: 0x4E9FE8).opacity(0.35), lineWidth: 0.5)))
         }
         .buttonStyle(.plain)
     }
@@ -273,7 +273,7 @@ struct TodayView: View {
     private func ringColor(_ def: RingDef, _ r: RingResult) -> Color {
         if def.colorHex != 0 { return Color(hex: def.colorHex) }
         switch r.band {
-        case .low: return Color(hex: 0xD86B4A)
+        case .low: return Theme.coral
         case .mid: return Theme.accentDark
         case .high: return Theme.sage
         }
@@ -320,7 +320,7 @@ struct TodayView: View {
                         Image(systemName: bucket.icon).font(.system(size: 12)).foregroundStyle(Theme.accentDark)
                         Text(bucket.label).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink)
                         if store.isToday && store.mealNudge?.key == bucket.rawValue {
-                            Text("now").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                            Text("now").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.onAccent)
                                 .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(Theme.accentDark))
                         }
                         Spacer()
@@ -377,7 +377,7 @@ struct TodayView: View {
         }
         .padding(14).glassList().padding(.top, 10)
     }
-    private func eatingColor(_ s: Int) -> Color { s >= 70 ? Theme.sage : (s >= 45 ? Theme.accentDark : Color(hex: 0xD86B4A)) }
+    private func eatingColor(_ s: Int) -> Color { s >= 70 ? Theme.sage : (s >= 45 ? Theme.accentDark : Theme.coral) }
 
     @ViewBuilder private var hydrationModule: some View {
         SectionHeader(text: "Hydration", color: store.moduleColor("hydration"))
@@ -405,14 +405,14 @@ struct TodayView: View {
         if let n = weather.now {
             let cond = WeatherManager.condition(n.code)
             let advice = weather.outdoorAdvice()
-            GlassCard(padding: 10, cornerRadius: 20, tint: Color(hex: 0x2E8AE0).opacity(0.10)) {
+            GlassCard(padding: 10, cornerRadius: 20, tint: Theme.adaptive(light: 0x2E8AE0, darkGrey: 0x4E9FE8).opacity(0.10)) {
                 VStack(spacing: 3) {
-                    Image(systemName: cond.symbol).font(.system(size: 22)).foregroundStyle(Color(hex: 0x2E8AE0))
+                    Image(systemName: cond.symbol).font(.system(size: 22)).foregroundStyle(Theme.adaptive(light: 0x2E8AE0, darkGrey: 0x4E9FE8))
                     Text("\(Int(n.tempC))\u{00b0}").font(.system(size: 17, weight: .bold)).foregroundStyle(Theme.ink)
                         .lineLimit(1).minimumScaleFactor(0.7)
                     Text(advice.ok ? "Go out" : "Indoors")
                         .font(.system(size: 10, weight: .medium)).lineLimit(1)
-                        .foregroundStyle(advice.ok ? Theme.sage : Color(hex: 0xD86B4A))
+                        .foregroundStyle(advice.ok ? Theme.sage : Theme.coral)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -457,7 +457,7 @@ struct TodayView: View {
                                     if f.delta != 0 {
                                         Text(f.delta > 0 ? "+\(f.delta)" : "\(f.delta)")
                                             .font(.system(size: 11, weight: .bold))
-                                            .foregroundStyle(f.delta > 0 ? Theme.sage : Color(hex: 0xD86B4A))
+                                            .foregroundStyle(f.delta > 0 ? Theme.sage : Theme.coral)
                                             .frame(width: 28, alignment: .leading)
                                     } else {
                                         Image(systemName: "circle.fill").font(.system(size: 5)).foregroundStyle(Theme.tertiaryInk).frame(width: 28, alignment: .leading)
@@ -500,7 +500,7 @@ struct TodayView: View {
                     Text(done ? "Check-in logged" : "How do you feel?")
                         .font(.system(size: 13, weight: .semibold))
                 }
-                .foregroundStyle(done ? .white : Theme.accentDark)
+                .foregroundStyle(done ? Theme.onAccent : Theme.accentDark)
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .background(
                     Capsule().fill(done ? Theme.accentDark : Theme.accentDark.opacity(0.12))
@@ -512,7 +512,7 @@ struct TodayView: View {
     }
 
     private func bandColor(_ score: Int) -> Color {
-        score >= 70 ? Theme.sage : (score >= 45 ? Theme.accentDark : Color(hex: 0xD86B4A))
+        score >= 70 ? Theme.sage : (score >= 45 ? Theme.accentDark : Theme.coral)
     }
 
     @ViewBuilder private func tonightPlanCard(_ plan: SleepPlanner.Plan) -> some View {
@@ -529,7 +529,7 @@ struct TodayView: View {
                 let ok = dinnerEpoch <= plan.dinnerCutoffEpoch
                 HStack(spacing: 5) {
                     Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .font(.system(size: 11)).foregroundStyle(ok ? Theme.sage : Color(hex: 0xD86B4A))
+                        .font(.system(size: 11)).foregroundStyle(ok ? Theme.sage : Theme.coral)
                     Text(ok ? "Dinner timing looks good for that bedtime." : "Dinner was after \(cutoffStr) — may push sleep later.")
                         .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
                 }
@@ -545,17 +545,17 @@ struct TodayView: View {
         return VStack(alignment: .leading, spacing: 4) {
             GeometryReader { geo in
                 HStack(spacing: 2) {
-                    stageBar(geo.size.width, s.deepMin / total, Color(hex: 0x3B43C0))
-                    stageBar(geo.size.width, s.remMin / total, Color(hex: 0x6E7BFF))
-                    stageBar(geo.size.width, s.coreMin / total, Color(hex: 0x9DB0FF))
-                    stageBar(geo.size.width, s.awakeMin / total, Color(hex: 0xE0C089))
+                    stageBar(geo.size.width, s.deepMin / total, Theme.adaptive(light: 0x3B43C0, darkGrey: 0x7C86F0))
+                    stageBar(geo.size.width, s.remMin / total, Theme.adaptive(light: 0x6E7BFF, darkGrey: 0x9AA4FF))
+                    stageBar(geo.size.width, s.coreMin / total, Theme.adaptive(light: 0x9DB0FF, darkGrey: 0xB8C6FF))
+                    stageBar(geo.size.width, s.awakeMin / total, Theme.adaptive(light: 0xE0C089, darkGrey: 0xEBD3A6))
                 }
             }
             .frame(height: 8)
             HStack(spacing: 10) {
-                stageLegend("Deep", Color(hex: 0x3B43C0), s.deepMin)
-                stageLegend("REM", Color(hex: 0x6E7BFF), s.remMin)
-                stageLegend("Core", Color(hex: 0x9DB0FF), s.coreMin)
+                stageLegend("Deep", Theme.adaptive(light: 0x3B43C0, darkGrey: 0x7C86F0), s.deepMin)
+                stageLegend("REM", Theme.adaptive(light: 0x6E7BFF, darkGrey: 0x9AA4FF), s.remMin)
+                stageLegend("Core", Theme.adaptive(light: 0x9DB0FF, darkGrey: 0xB8C6FF), s.coreMin)
             }
         }
     }
@@ -588,9 +588,9 @@ struct TodayView: View {
         TimelineView(.periodic(from: .now, by: 30)) { ctx in
             let now = ctx.date
             let inWindow = isFastingWindow(now)
-            GlassCard(padding: 16, cornerRadius: 20, tint: Color(hex: 0x3B4A7C).opacity(0.12)) {
+            GlassCard(padding: 16, cornerRadius: 20, tint: Theme.accentDark.opacity(0.12)) {
                 HStack(spacing: 13) {
-                    IconTile(symbol: "moon.stars.fill", colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)], size: 36, corner: 11)
+                    IconTile(symbol: "moon.stars.fill", colors: [Theme.accent, Theme.accentDark], size: 36, corner: 11)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(inWindow ? "Iftar in \(countdown(to: prayer.iftar, from: now))"
                                       : "Suhoor ends in \(countdown(to: prayer.suhoorEnd, from: now))")
@@ -636,9 +636,9 @@ struct TodayView: View {
                         } label: {
                             Text(fasting.isFasting ? "End fast" : "Start fast")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(fasting.isFasting ? Theme.accentDark : .white)
+                                .foregroundStyle(fasting.isFasting ? Theme.accentDark : Theme.onAccent)
                                 .padding(.horizontal, 16).padding(.vertical, 9)
-                                .background(Capsule().fill(fasting.isFasting ? AnyShapeStyle(Color.white.opacity(0.6)) : AnyShapeStyle(Theme.accentDark)))
+                                .background(Capsule().fill(fasting.isFasting ? AnyShapeStyle(Theme.surfaceOverlay) : AnyShapeStyle(Theme.accentDark)))
                                 .overlay(Capsule().strokeBorder(Theme.accent.opacity(fasting.isFasting ? 0.4 : 0), lineWidth: 0.5))
                         }
                         .buttonStyle(.plain)
@@ -654,7 +654,7 @@ struct TodayView: View {
                             }
                             GeometryReader { geo in
                                 ZStack(alignment: .leading) {
-                                    Capsule().fill(Color(white: 0.5).opacity(0.15)).frame(height: 8)
+                                    Capsule().fill(Theme.tertiaryInk.opacity(0.15)).frame(height: 8)
                                     Capsule().fill(progress >= 1 ? Theme.sage : Theme.accentDark)
                                         .frame(width: geo.size.width * progress, height: 8)
                                 }
@@ -750,7 +750,7 @@ struct TodayView: View {
     }
 
     private func hrZoneBar(_ zones: [Double]) -> some View {
-        let colors = [Color(hex: 0x8FB0FF), Color(hex: 0x5F9E7A), Color(hex: 0xE0B341), Color(hex: 0xE0873A), Color(hex: 0xD8503A)]
+        let colors = [Theme.adaptive(light: 0x8FB0FF, darkGrey: 0xA8C2FF), Theme.adaptive(light: 0x5F9E7A, darkGrey: 0x7CC49A), Theme.adaptive(light: 0xE0B341, darkGrey: 0xEBC862), Theme.adaptive(light: 0xE0873A, darkGrey: 0xF0A05E), Theme.adaptive(light: 0xD8503A, darkGrey: 0xF07257)]
         let total = max(1, zones.reduce(0, +))
         return VStack(alignment: .leading, spacing: 3) {
             GeometryReader { geo in
@@ -772,7 +772,7 @@ struct TodayView: View {
                     Button { editWorkout = w } label: {
                         HStack(spacing: 11) {
                             IconTile(symbol: Workout.symbol(w.kind),
-                                     colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 30, corner: 9)
+                                     colors: [Theme.accent, Theme.accentDark], size: 30, corner: 9)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(w.title.isEmpty ? Workout.label(w.kind) : w.title)
                                     .font(.system(size: 15.5, weight: .medium)).foregroundStyle(Theme.ink)
@@ -780,9 +780,9 @@ struct TodayView: View {
                             }
                             Spacer()
                             if w.healthWritten {
-                                Image(systemName: "heart.fill").font(.system(size: 11)).foregroundStyle(Color(hex: 0xFB1E4B).opacity(0.7))
+                                Image(systemName: "heart.fill").font(.system(size: 11)).foregroundStyle(Theme.adaptive(light: 0xFB1E4B, darkGrey: 0xFF5C7A).opacity(0.7))
                             }
-                            Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                            Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
                         }
                         .padding(.horizontal, 16).padding(.vertical, 11)
                     }
@@ -889,7 +889,7 @@ struct TodayView: View {
                 }
                 Spacer()
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 22)).foregroundStyle(on ? Theme.sage : Color(white: 0.47).opacity(0.3))
+                    .font(.system(size: 22)).foregroundStyle(on ? Theme.sage : Theme.tertiaryInk.opacity(0.3))
             }
             .padding(.horizontal, 16).padding(.vertical, 11)
         }
@@ -905,7 +905,7 @@ struct TodayView: View {
             .font(.system(size: 10.5, weight: .medium))
             .foregroundStyle(logged ? Theme.sage : Theme.tertiaryInk)
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .background(Capsule().fill((logged ? Theme.sage : Color(white: 0.47)).opacity(0.12)))
+            .background(Capsule().fill((logged ? Theme.sage : Theme.tertiaryInk).opacity(0.12)))
     }
 
     private static func mealKeyForSlot(_ slot: RegimenSlot) -> String {
@@ -978,7 +978,7 @@ struct TodayView: View {
                 Image(systemName: done ? "checkmark.circle.fill" : "target").font(.system(size: 10))
                 Text(focus).font(.system(size: 11, weight: .semibold)).lineLimit(1)
             }
-            .foregroundStyle(done ? .white : Theme.accentDark)
+            .foregroundStyle(done ? Theme.onAccent : Theme.accentDark)
             .padding(.horizontal, 9).padding(.vertical, 4)
             .background(Capsule().fill(done ? Theme.sage : Theme.accent.opacity(0.12)))
         }
@@ -991,7 +991,7 @@ struct TodayView: View {
                 Image(systemName: "moon.zzz.fill").font(.system(size: 10))
                 Text("Wind down").font(.system(size: 11, weight: .semibold))
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.onAccent)
             .padding(.horizontal, 9).padding(.vertical, 4)
             .background(Capsule().fill(Theme.accentDark))
         }
@@ -1012,9 +1012,9 @@ struct TodayView: View {
                     Text(DayStatus.label(shown) + (store.draft.status == "normal" && effective == "travel" ? " (auto)" : ""))
                         .font(.system(size: 11, weight: .semibold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.onAccent)
                 .padding(.horizontal, 9).padding(.vertical, 4)
-                .background(Capsule().fill(Color(hex: 0x5B43E0)))
+                .background(Capsule().fill(Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8E7BFF)))
             } else {
                 HStack(spacing: 4) {
                     Image(systemName: "flag").font(.system(size: 10))
@@ -1031,10 +1031,10 @@ struct TodayView: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(enabled ? Theme.accentDark : Color(white: 0.27).opacity(0.25))
+                .foregroundStyle(enabled ? Theme.accentDark : Theme.quaternaryInk)
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.white.opacity(0.5))
-                    .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 0.5)))
+                .background(Circle().fill(Theme.surfaceOverlay)
+                    .overlay(Circle().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5)))
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
@@ -1077,10 +1077,10 @@ struct TodayView: View {
                                     .lineLimit(1).minimumScaleFactor(0.75)
                                 Text(prayed ? band.label : timeStr(prayer.displayTime(name, on: date, from: times) ?? date))
                                     .font(.system(size: 12.5, weight: .semibold))
-                                    .foregroundStyle(prayed ? .white : (isNext ? Theme.accentDark : Theme.ink))
+                                    .foregroundStyle(prayed ? Theme.onAccent : (isNext ? Theme.accentDark : Theme.ink))
                                 Image(systemName: prayed ? "checkmark.circle.fill" : "circle")
                                     .font(.system(size: 13))
-                                    .foregroundStyle(prayed ? .white : Color(white: 0.27).opacity(0.3))
+                                    .foregroundStyle(prayed ? Theme.onAccent : Theme.quaternaryInk)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
@@ -1112,7 +1112,7 @@ struct TodayView: View {
     @ViewBuilder private var coachCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 11) {
-                IconTile(symbol: "sparkles", colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 32, corner: 10)
+                IconTile(symbol: "sparkles", colors: [Theme.accent, Theme.accentDark], size: 32, corner: 10)
                 if store.suggestionLoading && store.suggestion.isEmpty {
                     Text("Thinking about your day…")
                         .font(.system(size: 14)).foregroundStyle(Theme.secondaryInk)
@@ -1142,7 +1142,7 @@ struct TodayView: View {
                 }
                 .foregroundStyle(Theme.accentDark)
                 .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(RoundedRectangle(cornerRadius: 13).fill(Color.white.opacity(0.5)))
+                .background(RoundedRectangle(cornerRadius: 13).fill(Theme.surfaceOverlay))
                 .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.accent.opacity(0.3), lineWidth: 0.5))
             }
             .buttonStyle(.plain)
@@ -1225,9 +1225,9 @@ struct TodayView: View {
                     FlowLayout(spacing: 6) {
                         ForEach(n.micros) { m in
                             Text("\(m.name) \(fmtMicro(m.amount))\(m.unit)")
-                                .font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color(hex: 0x5B43E0))
+                                .font(.system(size: 11.5, weight: .medium)).foregroundStyle(Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8E7BFF))
                                 .padding(.horizontal, 9).padding(.vertical, 5)
-                                .background(Capsule().fill(Color(hex: 0x6FA8FF).opacity(0.16)))
+                                .background(Capsule().fill(Theme.adaptive(light: 0x6FA8FF, darkGrey: 0x7FB6FF).opacity(0.16)))
                         }
                     }
                 }
@@ -1242,7 +1242,7 @@ struct TodayView: View {
             Text(label).font(.system(size: 10)).foregroundStyle(Theme.tertiaryInk)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay))
     }
 
     private func fmtMicro(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(format: "%.1f", d) }
@@ -1265,12 +1265,12 @@ struct TodayView: View {
         if qty > 0 {
             HStack(spacing: 8) {
                 Button { store.removeServing(item) } label: {
-                    Image(systemName: qty == 1 ? "trash" : "minus").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                    Image(systemName: qty == 1 ? "trash" : "minus").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.onAccent)
                 }.buttonStyle(.plain)
                 Text(qty > 1 ? "\(item.name) ×\(qty)" : item.name)
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.onAccent)
                 Button { store.addServing(item) } label: {
-                    Image(systemName: "plus").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                    Image(systemName: "plus").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.onAccent)
                 }.buttonStyle(.plain)
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
@@ -1283,7 +1283,7 @@ struct TodayView: View {
                 }
                 .padding(.horizontal, 12).padding(.vertical, 9)
                 .background(
-                    Capsule().fill(Color.white.opacity(0.55))
+                    Capsule().fill(Theme.surfaceOverlay)
                         .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.4), lineWidth: 0.5))
                 )
             }
@@ -1338,8 +1338,8 @@ struct TodayView: View {
         .padding(.horizontal, 13).padding(.vertical, 11)
         .background(
             RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .fill(Color.white.opacity(0.5))
-                .overlay(RoundedRectangle(cornerRadius: 15).strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
+                .fill(Theme.surfaceOverlay)
+                .overlay(RoundedRectangle(cornerRadius: 15).strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
         )
     }
 
@@ -1373,7 +1373,7 @@ struct TodayView: View {
                             .foregroundStyle(highlight ? Theme.accentDark : Theme.secondaryInk)
                         if highlight {
                             Text("now").font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Theme.onAccent)
                                 .padding(.horizontal, 6).padding(.vertical, 1)
                                 .background(Capsule().fill(Theme.accentDark))
                         }
@@ -1392,11 +1392,11 @@ struct TodayView: View {
                 Task { await store.estimate() }
             } label: {
                 Text(estimateLabel)
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(LinearGradient(colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)],
+                            .fill(LinearGradient(colors: [Theme.accent, Theme.accentDark],
                                                  startPoint: .top, endPoint: .bottom))
                     )
                     .opacity(store.aiStatus == .loading ? 0.7 : 1)
@@ -1432,7 +1432,7 @@ struct TodayView: View {
             VStack(spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(store.aiModelLine)
-                        .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color(hex: 0x3B4A7C))
+                        .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.accentDark)
                     Spacer()
                     Text("±10–15%").font(.system(size: 11.5)).foregroundStyle(Theme.tertiaryInk)
                 }
@@ -1468,7 +1468,7 @@ struct TodayView: View {
                     Text("Whole day").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
                     Spacer()
                     Text("\(Int((ai.total.calories ?? 0).rounded())) kcal · \(Int((ai.total.protein ?? 0).rounded()))g protein")
-                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0x3B4A7C))
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
                 }
                 .padding(.top, 10)
                 Text("Auto-filled your totals. Estimates are approximate.")
@@ -1488,16 +1488,16 @@ struct TodayView: View {
                 Text("Couldn\u{2019}t reach the estimator just now — no problem. Add calories & protein by hand below.")
                 if !store.aiErrorMessage.isEmpty {
                     Text(store.aiErrorMessage)
-                        .font(.system(size: 12)).foregroundStyle(Color(hex: 0xD86B4A))
+                        .font(.system(size: 12)).foregroundStyle(Theme.coral)
                 }
             }
-                .font(.system(size: 13.5)).foregroundStyle(Color(white: 0.29))
+                .font(.system(size: 13.5)).foregroundStyle(Theme.secondaryInk)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 14).padding(.vertical, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.5))
-                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(white: 0.27).opacity(0.12), lineWidth: 0.5))
+                    RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.surfaceOverlay)
+                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
                 )
                 .padding(.top, 12)
         }
@@ -1517,7 +1517,7 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 3) {
                 Text(title).font(.system(size: 12)).foregroundStyle(Theme.secondaryInk)
-                Text(target).font(.system(size: 12)).foregroundStyle(Color(white: 0.27).opacity(0.35))
+                Text(target).font(.system(size: 12)).foregroundStyle(Theme.quaternaryInk)
             }
             TextField("—", text: binding)
                 .keyboardType(.numberPad)
@@ -1528,8 +1528,8 @@ struct TodayView: View {
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .overlay(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.5)))
-                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+                .overlay(RoundedRectangle(cornerRadius: 18).fill(Theme.surfaceOverlay))
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
         )
     }
 
@@ -1578,7 +1578,7 @@ struct TodayView: View {
                 ToggleRow(on: on) { store.toggleHabit(def) }
             } else {
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 22)).foregroundStyle(on ? Theme.sage : Color(white: 0.47).opacity(0.3))
+                    .font(.system(size: 22)).foregroundStyle(on ? Theme.sage : Theme.tertiaryInk.opacity(0.3))
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 13)
@@ -1594,7 +1594,7 @@ struct TodayView: View {
         return HStack(spacing: 14) {
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text("\(s)").font(Theme.serif(40)).foregroundStyle(msg.color)
-                Text("/\(total)").font(.system(size: 19)).foregroundStyle(Color(white: 0.27).opacity(0.4))
+                Text("/\(total)").font(.system(size: 19)).foregroundStyle(Theme.quaternaryInk)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(msg.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
@@ -1605,9 +1605,9 @@ struct TodayView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(won ? Theme.sage.opacity(0.1) : Color.white.opacity(0.5))
+                .fill(won ? Theme.sage.opacity(0.1) : Theme.surfaceOverlay)
                 .overlay(RoundedRectangle(cornerRadius: 22)
-                    .strokeBorder(won ? Theme.sage.opacity(0.3) : .white.opacity(0.7), lineWidth: 0.5))
+                    .strokeBorder(won ? Theme.sage.opacity(0.3) : Theme.surfaceStroke, lineWidth: 0.5))
         )
         .padding(.top, 14)
     }
@@ -1637,13 +1637,13 @@ struct TodayView: View {
                 let days = store.days(until: cd.date)
                 HStack(spacing: 12) {
                     IconTile(symbol: cd.kind == "work" ? "flag.checkered" : "graduationcap.fill",
-                             colors: [Color(hex: 0x6FA8FF), Color(hex: 0x5B43E0)], size: 40, corner: 12)
+                             colors: [Theme.adaptive(light: 0x6FA8FF, darkGrey: 0x7FB6FF), Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8E7BFF)], size: 40, corner: 12)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(cd.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
                         Text(examLine(days)).font(.system(size: 12.5)).foregroundStyle(Theme.secondaryInk)
                     }
                     Spacer()
-                    Text("\(max(0, days))").font(Theme.serif(34)).foregroundStyle(Color(hex: 0x5B43E0))
+                    Text("\(max(0, days))").font(Theme.serif(34)).foregroundStyle(Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8E7BFF))
                 }
                 .padding(16).glassList().padding(.bottom, 8)
             }
@@ -1652,14 +1652,14 @@ struct TodayView: View {
 
             // hours today
             HStack(spacing: 12) {
-                Image(systemName: "clock.fill").foregroundStyle(Color(hex: 0x5B43E0))
+                Image(systemName: "clock.fill").foregroundStyle(Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8E7BFF))
                 Text(String(format: "%.1f / %.0f h · \(vocab.hours.lowercased())", store.draft.studyHours, store.targets.studyHours))
                     .font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink)
                 Spacer()
                 Button("+30m") { store.addStudyHours(0.5) }
-                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0x5B43E0))
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8E7BFF))
                     .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(Capsule().fill(Color(hex: 0x6FA8FF).opacity(0.18)))
+                    .background(Capsule().fill(Theme.adaptive(light: 0x6FA8FF, darkGrey: 0x7FB6FF).opacity(0.18)))
             }
             .padding(16).glassList().padding(.top, 10)
 
@@ -1669,7 +1669,7 @@ struct TodayView: View {
                         Button { store.toggleSubject(s.id) } label: {
                             HStack {
                                 Image(systemName: s.done ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(s.done ? Theme.sage : Color(white: 0.47).opacity(0.3))
+                                    .foregroundStyle(s.done ? Theme.sage : Theme.tertiaryInk.opacity(0.3))
                                 Text(s.name).font(.system(size: 15))
                                     .foregroundStyle(s.done ? Theme.tertiaryInk : Theme.ink)
                                     .strikethrough(s.done)
@@ -1708,23 +1708,23 @@ struct TodayView: View {
                     Button(studyTimer.paused ? "Resume" : "Pause") {
                         studyTimer.paused ? studyTimer.resume() : studyTimer.pause()
                     }
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color(hex: 0x5B43E0))
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8E7BFF))
                     .frame(maxWidth: .infinity).padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0x6FA8FF).opacity(0.18)))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Theme.adaptive(light: 0x6FA8FF, darkGrey: 0x7FB6FF).opacity(0.18)))
                     Button("Stop & log") {
                         let mins = studyTimer.stop()
                         store.logStudySession(subject: studyTimer.subject, minutes: mins)
                     }
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0x5B43E0)))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8E7BFF)))
                 }
             }
             .padding(16).glassList().padding(.top, 10)
         } else {
             Button { showStudy = true } label: {
                 HStack(spacing: 9) {
-                    Image(systemName: "play.circle.fill").foregroundStyle(Color(hex: 0x5B43E0))
+                    Image(systemName: "play.circle.fill").foregroundStyle(Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8E7BFF))
                     Text("Start a \(store.workVocab.session.lowercased())").font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink)
                     Spacer()
                 }
@@ -1774,7 +1774,7 @@ struct TodayView: View {
             HStack(spacing: 4) {
                 Text(label).font(.system(size: 12)).foregroundStyle(Theme.secondaryInk)
                 if let hint {
-                    Text(hint).font(.system(size: 12)).foregroundStyle(Color(white: 0.27).opacity(0.35))
+                    Text(hint).font(.system(size: 12)).foregroundStyle(Theme.quaternaryInk)
                 }
             }
             TextField(placeholder, text: binding, axis: .vertical)
