@@ -61,7 +61,7 @@ struct CoachChatListView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            IconTile(symbol: "sparkles", colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 40, corner: 13)
+            IconTile(symbol: "sparkles", colors: [Theme.accent, Theme.accentDark], size: 40, corner: 13)
             Text("No chats yet").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.ink)
             Text("Start a conversation — Coach can see your logs.")
                 .font(.system(size: 13.5)).foregroundStyle(Theme.secondaryInk).multilineTextAlignment(.center)
@@ -86,7 +86,7 @@ struct CoachChatListView: View {
                     .font(.system(size: 12.5)).foregroundStyle(Theme.tertiaryInk).lineLimit(1)
             }
             Spacer()
-            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())

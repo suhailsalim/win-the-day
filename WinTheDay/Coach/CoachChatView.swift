@@ -88,7 +88,7 @@ struct CoachChatView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 11) {
-                IconTile(symbol: "sparkles", colors: [Theme.accent, Color(hex: 0x3B4A7C)], size: 34, corner: 11)
+                IconTile(symbol: "sparkles", colors: [Theme.accent, Theme.accentDark], size: 34, corner: 11)
                 Text("Ask me anything about your day, your week, meals, training or study. I can see your logs.")
                     .font(.system(size: 14.5)).foregroundStyle(Theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
@@ -103,7 +103,7 @@ struct CoachChatView: View {
                             .foregroundStyle(Theme.accentDark.opacity(0.6))
                     }
                     .padding(.horizontal, 14).padding(.vertical, 11)
-                    .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.55)))
+                    .background(RoundedRectangle(cornerRadius: 14).fill(Theme.surfaceOverlay))
                     .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.accent.opacity(0.3), lineWidth: 0.5))
                 }
                 .buttonStyle(.plain)
@@ -151,8 +151,8 @@ struct CoachChatView: View {
                             Text("Dismiss")
                                 .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.secondaryInk)
                                 .padding(.horizontal, 16).padding(.vertical, 8)
-                                .background(Capsule().fill(Color.white.opacity(0.6)))
-                                .overlay(Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+                                .background(Capsule().fill(Theme.surfaceOverlay))
+                                .overlay(Capsule().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
                         }
                         .buttonStyle(.plain)
                         Spacer(minLength: 0)
@@ -199,11 +199,11 @@ struct CoachChatView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(m.isUser ? AnyShapeStyle(Theme.accentDark)
-                                       : AnyShapeStyle(Color.white.opacity(0.7)))
+                                       : AnyShapeStyle(Theme.surfaceOverlay))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(.white.opacity(m.isUser ? 0 : 0.7), lineWidth: 0.5)
+                        .strokeBorder(m.isUser ? Color.clear : Theme.surfaceStroke, lineWidth: 0.5)
                 )
             if !m.isUser { Spacer(minLength: 40) }
         }
@@ -214,7 +214,7 @@ struct CoachChatView: View {
             Text("Coach is thinking…")
                 .font(.system(size: 14)).foregroundStyle(Theme.secondaryInk)
                 .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.6)))
+                .background(RoundedRectangle(cornerRadius: 18).fill(Theme.surfaceOverlay))
             Spacer(minLength: 40)
         }
     }
@@ -226,8 +226,8 @@ struct CoachChatView: View {
                 .lineLimit(1...4)
                 .focused($inputFocused)
                 .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(Capsule().fill(Color.white.opacity(0.7)))
-                .overlay(Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+                .background(Capsule().fill(Theme.surfaceOverlay))
+                .overlay(Capsule().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
             Button { send(input) } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 30))
@@ -286,8 +286,8 @@ struct CoachWriteLogView: View {
                                         Text("Undo")
                                             .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
                                             .padding(.horizontal, 14).padding(.vertical, 7)
-                                            .background(Capsule().fill(Color.white.opacity(0.6)))
-                                            .overlay(Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+                                            .background(Capsule().fill(Theme.surfaceOverlay))
+                                            .overlay(Capsule().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
                                     }
                                     .buttonStyle(.plain)
                                 }

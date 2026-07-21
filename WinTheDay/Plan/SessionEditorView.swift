@@ -89,7 +89,7 @@ struct SessionEditorView: View {
                         }
                         .foregroundStyle(on ? .white : Theme.ink)
                         .frame(width: 80).padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: 13).fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Color.white.opacity(0.55))))
+                        .background(RoundedRectangle(cornerRadius: 13).fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay)))
                     }.buttonStyle(.plain)
                 }
             }

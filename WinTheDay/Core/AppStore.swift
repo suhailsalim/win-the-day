@@ -34,15 +34,15 @@ final class AppStore: ObservableObject {
         if let hex = personal.moduleColors[key] { return Color(hex: hex) }
         switch key {
         case "rings": return Theme.accentDark
-        case "health": return Color(hex: 0xFB1E4B)
-        case "hydration": return Color(hex: 0x2E8AE0)
-        case "regimen": return Color(hex: 0x2FA37E)
-        case "workStudy": return Color(hex: 0x5B43E0)
-        case "fasting": return Color(hex: 0x3B4A7C)
-        case "ramadan": return Color(hex: 0x4C5C96)
-        case "quran": return Color(hex: 0x2F7D5E)
-        case "sleep": return Color(hex: 0x6E7BFF)
-        case "weather": return Color(hex: 0x2E8AE0)
+        case "health": return Theme.adaptive(light: 0xFB1E4B, darkGrey: 0xFF5C7C)
+        case "hydration": return Theme.adaptive(light: 0x2E8AE0, darkGrey: 0x5AB0F0)
+        case "regimen": return Theme.adaptive(light: 0x2FA37E, darkGrey: 0x4FC9A0)
+        case "workStudy": return Theme.adaptive(light: 0x5B43E0, darkGrey: 0x9585F5)
+        case "fasting": return Theme.accentDark
+        case "ramadan": return Theme.adaptive(light: 0x4C5C96, darkGrey: 0xA3AFE4)
+        case "quran": return Theme.adaptive(light: 0x2F7D5E, darkGrey: 0x54B389)
+        case "sleep": return Theme.adaptive(light: 0x6E7BFF, darkGrey: 0x9AA3FF)
+        case "weather": return Theme.adaptive(light: 0x2E8AE0, darkGrey: 0x5AB0F0)
         case "score": return Theme.sage
         default: return Theme.accentDark
         }

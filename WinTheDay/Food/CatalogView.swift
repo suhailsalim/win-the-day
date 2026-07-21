@@ -85,7 +85,7 @@ struct CatalogView: View {
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                .font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
@@ -127,7 +127,7 @@ struct ItemEditor: View {
                         SectionHeader(text: "Vitamins & minerals")
                         microsCard
                         if !errorMsg.isEmpty {
-                            Text(errorMsg).font(.system(size: 13)).foregroundStyle(Color(hex: 0xD86B4A))
+                            Text(errorMsg).font(.system(size: 13)).foregroundStyle(Theme.coral)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 8).padding(.top, 10)
                         }
@@ -185,8 +185,8 @@ struct ItemEditor: View {
             TextField("Or type, e.g. \u{201C}1 scoop ON gold whey\u{201D}", text: $nlText, axis: .vertical)
                 .font(.system(size: 15)).foregroundStyle(Theme.ink)
                 .padding(.horizontal, 12).padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.6), lineWidth: 0.5)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay)
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.surfaceStroke, lineWidth: 0.5)))
             Button { Task { await autofill(image: nil) } } label: {
                 HStack(spacing: 6) {
                     if parsing { ProgressView().tint(.white) }
@@ -195,7 +195,7 @@ struct ItemEditor: View {
                 .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                 .frame(maxWidth: .infinity).padding(.vertical, 11)
                 .background(RoundedRectangle(cornerRadius: 13)
-                    .fill(LinearGradient(colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)], startPoint: .top, endPoint: .bottom)))
+                    .fill(LinearGradient(colors: [Theme.accent, Theme.accentDark], startPoint: .top, endPoint: .bottom)))
             }
             .buttonStyle(.plain)
             .disabled(parsing || nlText.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -214,7 +214,7 @@ struct ItemEditor: View {
             Label(title, systemImage: symbol)
                 .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
                 .frame(maxWidth: .infinity).padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.6))
+                .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay)
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.accent.opacity(0.4), lineWidth: 0.5)))
         }
         .buttonStyle(.plain)
@@ -262,7 +262,7 @@ struct ItemEditor: View {
                     } label: {
                         Text(chip.label).font(.system(size: 13, weight: .medium)).foregroundStyle(on ? .white : Theme.ink)
                             .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(Capsule().fill(on ? AnyShapeStyle(Theme.sage) : AnyShapeStyle(Color.white.opacity(0.55))))
+                            .background(Capsule().fill(on ? AnyShapeStyle(Theme.sage) : AnyShapeStyle(Theme.surfaceOverlay)))
                     }.buttonStyle(.plain)
                 }
             }
@@ -289,7 +289,7 @@ struct ItemEditor: View {
                         TextField("unit", text: $m.unit).font(.system(size: 13)).foregroundStyle(Theme.tertiaryInk)
                             .frame(width: 42)
                         Button { item.micros.removeAll { $0.id == m.id } } label: {
-                            Image(systemName: "minus.circle.fill").font(.system(size: 16)).foregroundStyle(Color(hex: 0xD86B4A))
+                            Image(systemName: "minus.circle.fill").font(.system(size: 16)).foregroundStyle(Theme.coral)
                         }.buttonStyle(.plain)
                     }
                     .padding(.horizontal, 16).padding(.vertical, 9)

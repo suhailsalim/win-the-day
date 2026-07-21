@@ -64,7 +64,7 @@ struct OccasionEditorView: View {
                         }
                         .foregroundStyle(on ? .white : Theme.ink)
                         .frame(width: 72).padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: 13).fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Color.white.opacity(0.55))))
+                        .background(RoundedRectangle(cornerRadius: 13).fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay)))
                     }.buttonStyle(.plain)
                 }
             }
@@ -207,7 +207,7 @@ struct OccasionEditorView: View {
                       text: $refineText, axis: .vertical)
                 .lineLimit(1...4).font(.system(size: 14))
                 .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(RoundedRectangle(cornerRadius: 11).fill(Color.white.opacity(0.5)))
+                .background(RoundedRectangle(cornerRadius: 11).fill(Theme.surfaceOverlay))
             Button {
                 let fb = refineText
                 save(silent: true)
