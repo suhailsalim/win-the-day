@@ -33,11 +33,19 @@ struct WinTheDayApp: App {
                 }
                 .animation(.easeOut(duration: 0.15), value: lock.shielded)
                 .task { lock.start(enabled: store.settings.appLockEnabled) }
+                // Cold launch: `.onChange(of: scenePhase)` isn't guaranteed to fire for the very
+                // first `.active`, and a Siri/widget write made before launch must not be lost.
+                .task { store.reconcileIntentWrites(prayerTimes: prayer.today, nextFajr: prayer.nextFajr) }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 store.writeAutoBackup()
                 store.refreshSmartReminders(force: true)
+            }
+            // Re-read anything an intent wrote while we were suspended, *before* any in-app edit
+            // can persist our stale cache over it. Cheap no-op when nothing was written.
+            if phase == .active {
+                store.reconcileIntentWrites(prayerTimes: prayer.today, nextFajr: prayer.nextFajr)
             }
             let on = store.settings.appLockEnabled
             switch phase {

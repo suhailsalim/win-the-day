@@ -854,6 +854,77 @@ final class AppStore: ObservableObject {
         }
     }
 
+    // MARK: - App Intents / interactive-widget reconciliation
+
+    /// Set by `StartFocusIntent`; `TodayView` watches it and opens the focus screen once.
+    @Published var pendingFocusOpen = false
+
+    private static let intentsDirtyKey = "intents_dirty_v1"   // mirrored in DayStore + WidgetActionQueue
+    private static let widgetActionsKey = "widget_actions_v1"
+
+    /// Call on every foreground. Siri intents and widget buttons write while this process is
+    /// suspended (or not running at all); our cached `AppData` would otherwise be stale and the
+    /// next in-app edit would persist that stale cache straight over their write. So: re-read the
+    /// blob from disk, then apply anything the widget process could only queue (it can't see the
+    /// app's `UserDefaults.standard`).
+    ///
+    /// `prayerTimes`/`nextFajr` come from `PrayerManager` so a queued prayer tap classifies against
+    /// the epoch it was tapped at — the same band an in-app tap at that moment would have got.
+    func reconcileIntentWrites(prayerTimes: PrayerTimes? = nil, nextFajr: Date? = nil) {
+        if UserDefaults.standard.bool(forKey: DayStore.openFocusKey) {
+            UserDefaults.standard.set(false, forKey: DayStore.openFocusKey)
+            tab = .today
+            pendingFocusOpen = true
+        }
+        let group = UserDefaults(suiteName: SharedStore.appGroup)
+        let dirty = group?.bool(forKey: Self.intentsDirtyKey) ?? false
+        let queued = drainWidgetActions(group)
+        guard dirty || !queued.isEmpty else { return }
+        group?.set(false, forKey: Self.intentsDirtyKey)
+
+        // 1. Disk wins: an intent's write landed there while we were suspended.
+        load()
+        draft = loadDraft(for: date)
+        // 2. Then fold in the widget taps, which never reached the blob at all.
+        for action in queued { applyWidgetAction(action, prayerTimes: prayerTimes, nextFajr: nextFajr) }
+        if !queued.isEmpty { persistData() }
+        publishSnapshot()
+        objectWillChange.send()
+    }
+
+    /// Read-and-clear in one step so a tap can't be applied twice.
+    private func drainWidgetActions(_ group: UserDefaults?) -> [[String: Any]] {
+        guard let group, let raw = group.data(forKey: Self.widgetActionsKey) else { return [] }
+        group.removeObject(forKey: Self.widgetActionsKey)
+        return ((try? JSONSerialization.jsonObject(with: raw)) as? [[String: Any]]) ?? []
+    }
+
+    private func applyWidgetAction(_ action: [String: Any], prayerTimes: PrayerTimes?, nextFajr: Date?) {
+        guard let kind = action["kind"] as? String else { return }
+        let day = (action["day"] as? String) ?? Self.dateString(Date())
+        var e = data.entries[day] ?? Entry(date: day)
+        switch kind {
+        case "water":
+            e.waterMl = max(0, e.waterMl + ((action["ml"] as? Int) ?? 250))
+        case "prayer":
+            guard let raw = action["name"] as? String,
+                  let name = PrayerTimes.Name(rawValue: raw), name.isPrayer,
+                  !e.prayers.isOn(raw) else { return }
+            let epoch = (action["epoch"] as? Double) ?? Date().timeIntervalSince1970
+            // Today's computed times only describe today — an older queued tap stays untimed.
+            let band: PrayerBand = (day == Self.dateString(Date()))
+                ? (prayerTimes.map { PrayerClassifier.classify(name, markedAt: Date(timeIntervalSince1970: epoch),
+                                                               today: $0, nextFajr: nextFajr) } ?? .unknown)
+                : .unknown
+            e.prayers.setOn(raw, true, at: epoch, band: band)
+            if name == .fajr { e.nn.fajr = true }
+        default:
+            return
+        }
+        if e.isMeaningful { data.entries[day] = e } else { data.entries.removeValue(forKey: day) }
+        if day == draft.date { draft = e }
+    }
+
     func updateSettings(_ change: (inout AppSettings) -> Void) {
         change(&settings)
         persistSettings()

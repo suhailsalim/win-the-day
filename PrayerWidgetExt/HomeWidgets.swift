@@ -44,6 +44,10 @@ struct NextPrayerWidget: Widget {
                 if let d = entry.snap.nextPrayerDate {
                     Text(d, format: .dateTime.hour().minute()).font(.system(size: 13, weight: .semibold)).foregroundStyle(accentD)
                 }
+                // One-tap mark for the prayer that's currently due — the one *before* "next".
+                if let due = duePrayer(entry.snap) {
+                    MarkPrayerButton(due: due, tint: sage).padding(.top, 2)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .containerBackground(for: .widget) { widgetBackground() }
@@ -435,5 +439,42 @@ struct SummaryWidget: Widget {
 
     private var divider: some View {
         Rectangle().fill(Color.black.opacity(0.08)).frame(width: 1, height: 44)
+    }
+}
+
+// MARK: - 1×1 Hydration (interactive)
+
+/// The only widget with a write button on the home screen. The tap is queued in the App Group and
+/// applied to the real entry when the app next foregrounds (see `WidgetActionIntents.swift`); the
+/// snapshot is nudged straight away so the ring moves without waiting for that.
+private let waterBlue = Color(red: 0.18, green: 0.54, blue: 0.88)
+
+struct HydrationWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "HydrationWidget", provider: SnapshotProvider()) { entry in
+            let s = entry.snap
+            let target = max(1, s.waterTarget)
+            let frac = min(1, Double(s.waterMl) / Double(target))
+            VStack(spacing: 6) {
+                ZStack {
+                    Circle().stroke(waterBlue.opacity(0.2), lineWidth: 7)
+                    Circle().trim(from: 0, to: CGFloat(frac))
+                        .stroke(frac >= 1 ? sage : waterBlue, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    VStack(spacing: 0) {
+                        Text(String(format: "%.1f", Double(s.waterMl) / 1000))
+                            .font(.system(size: 17, weight: .bold)).foregroundStyle(ink)
+                        Text("litres").font(.system(size: 9)).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: 62, height: 62)
+                WaterGlassButton(tint: waterBlue)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .containerBackground(for: .widget) { widgetBackground() }
+        }
+        .configurationDisplayName("Hydration")
+        .description("Today\u{2019}s water, with a one-tap glass.")
+        .supportedFamilies([.systemSmall])
     }
 }
