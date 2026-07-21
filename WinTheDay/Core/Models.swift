@@ -112,6 +112,8 @@ struct Entry: Codable, Equatable, Identifiable {
     var mainFocus = ""
     var mainFocusDone = false
     var quranPages = 0               // Qur'an pages read this day (khatmah position is derived from these)
+    var regimenTaken: [String: [String]] = [:]     // regimen id → slot keys taken that day
+    var regimenTakenAt: [String: Double] = [:]     // "regimenID#slot" → epoch it was marked (like prayers)
 
     var id: String { date }
 
@@ -154,6 +156,8 @@ struct Entry: Codable, Equatable, Identifiable {
         mainFocus = (try? c.decode(String.self, forKey: .mainFocus)) ?? ""
         mainFocusDone = (try? c.decode(Bool.self, forKey: .mainFocusDone)) ?? false
         quranPages = (try? c.decode(Int.self, forKey: .quranPages)) ?? 0
+        regimenTaken = (try? c.decode([String: [String]].self, forKey: .regimenTaken)) ?? [:]
+        regimenTakenAt = (try? c.decode([String: Double].self, forKey: .regimenTakenAt)) ?? [:]
         // Migrate legacy non-negotiables into the new manual-habit state.
         if habitState.isEmpty {
             if nn.moved { habitState["moved"] = true }
@@ -172,6 +176,7 @@ struct Entry: Codable, Equatable, Identifiable {
         if !mainFocus.trimmingCharacters(in: .whitespaces).isEmpty { return true }
         if quranPages > 0 { return true }   // the khatmah position is derived from saved entries
         if !logged.isEmpty || !foodEntries.isEmpty || !photos.isEmpty || prayers.anyTrue || waterMl > 0 || !workouts.isEmpty { return true }
+        if regimenTaken.values.contains(where: { !$0.isEmpty }) { return true }
         return [training, run, weight, steps, sms, calories, proteinG]
             .contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
     }
@@ -1133,6 +1138,114 @@ struct LoggedItem: Codable, Equatable, Identifiable {
     }
 }
 
+// MARK: - Medication & supplement regimens (adherence tracking only — never dosing advice)
+
+/// What a regimen is, for grouping and iconography only. The app records whether a dose was taken;
+/// it never suggests, adjusts or comments on doses.
+enum RegimenKind: String, Codable, CaseIterable, Identifiable, Equatable {
+    case supplement, med
+    var id: String { rawValue }
+    var label: String { self == .med ? "Medication" : "Supplement" }
+    var symbol: String { self == .med ? "pills.fill" : "leaf.fill" }
+}
+
+/// The slot a dose belongs to. Stored as the raw string in `Regimen.timesOfDay` so the set of slots
+/// can grow without breaking saved data (an unknown slot simply falls out of the UI grouping).
+enum RegimenSlot: String, Codable, CaseIterable, Identifiable, Equatable {
+    case morning, midday, evening, night
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+    /// Default reminder hour for the slot (24h). Fixed, so a regimen never needs its own clock.
+    var hour: Int {
+        switch self {
+        case .morning: return 8
+        case .midday: return 13
+        case .evening: return 19
+        case .night: return 22
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .morning: return "sunrise.fill"
+        case .midday: return "sun.max.fill"
+        case .evening: return "sunset.fill"
+        case .night: return "moon.fill"
+        }
+    }
+    static let order = RegimenSlot.allCases.map(\.rawValue)
+    /// Slot keys in canonical order, ignoring anything unrecognised.
+    static func sorted(_ keys: [String]) -> [RegimenSlot] {
+        allCases.filter { keys.contains($0.rawValue) }
+    }
+}
+
+/// One scheduled medication/supplement. `daysOfWeek` is 1–7 **Sunday-based**, matching
+/// `DateComponents.weekday`, so it is independent of `Calendar.current.firstWeekday` (which only
+/// affects how the week is laid out in the UI).
+struct Regimen: Codable, Equatable, Identifiable {
+    var id = UUID().uuidString
+    var name: String = ""
+    var dose: String = ""                       // free text the user typed, e.g. "1000 IU" — never interpreted
+    var timesOfDay: [String] = [RegimenSlot.morning.rawValue]
+    var daysOfWeek: Set<Int> = [1, 2, 3, 4, 5, 6, 7]
+    var withFood: Bool = false
+    var kind: RegimenKind = .supplement
+    var active: Bool = true
+    var remind: Bool = true
+    var startEpoch: Double = 0                  // 0 = always been scheduled
+
+    init(id: String = UUID().uuidString, name: String = "", dose: String = "",
+         timesOfDay: [String] = [RegimenSlot.morning.rawValue],
+         daysOfWeek: Set<Int> = [1, 2, 3, 4, 5, 6, 7], withFood: Bool = false,
+         kind: RegimenKind = .supplement, active: Bool = true, remind: Bool = true,
+         startEpoch: Double = 0) {
+        self.id = id; self.name = name; self.dose = dose; self.timesOfDay = timesOfDay
+        self.daysOfWeek = daysOfWeek; self.withFood = withFood; self.kind = kind
+        self.active = active; self.remind = remind; self.startEpoch = startEpoch
+    }
+
+    /// Tolerant decoding — `AppData.regimens` decodes as one array, so a single missing key must
+    /// never take the whole regimen list (or the document) down with it.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        dose = (try? c.decode(String.self, forKey: .dose)) ?? ""
+        timesOfDay = (try? c.decode([String].self, forKey: .timesOfDay)) ?? [RegimenSlot.morning.rawValue]
+        daysOfWeek = (try? c.decode(Set<Int>.self, forKey: .daysOfWeek)) ?? [1, 2, 3, 4, 5, 6, 7]
+        withFood = (try? c.decode(Bool.self, forKey: .withFood)) ?? false
+        kind = (try? c.decode(RegimenKind.self, forKey: .kind)) ?? .supplement
+        active = (try? c.decode(Bool.self, forKey: .active)) ?? true
+        remind = (try? c.decode(Bool.self, forKey: .remind)) ?? true
+        startEpoch = (try? c.decode(Double.self, forKey: .startEpoch)) ?? 0
+    }
+
+    var slots: [RegimenSlot] { RegimenSlot.sorted(timesOfDay) }
+    var isDaily: Bool { daysOfWeek.count >= 7 }
+
+    /// Is this regimen scheduled on `date` (weekday + start date)? Days before `startEpoch` are not.
+    func scheduled(on date: Date, calendar: Calendar = .current) -> Bool {
+        guard active, !slots.isEmpty else { return false }
+        if startEpoch > 0, date < calendar.startOfDay(for: Date(timeIntervalSince1970: startEpoch)) { return false }
+        return daysOfWeek.contains(calendar.component(.weekday, from: date))
+    }
+}
+
+/// A deleted regimen's name, kept so past days' `regimenTaken` still renders instead of showing a
+/// dangling id. Tiny by design — id + name only, no schedule.
+struct RetiredRegimen: Codable, Equatable, Identifiable {
+    var id: String = ""
+    var name: String = ""
+
+    init(id: String = "", name: String = "") { self.id = id; self.name = name }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? ""
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+    }
+}
+
 // MARK: - Top-level persisted document
 
 struct AppData: Codable {
@@ -1151,6 +1264,8 @@ struct AppData: Codable {
     var rings: [RingDef] = []
     var earnedMilestones: [EarnedMilestone] = []   // permanent earned records (Engines/Milestones.swift)
     var khatmah: KhatmahPlan?                      // active Qur'an reading plan (Engines/QuranProgress.swift)
+    var regimens: [Regimen] = []                   // medication / supplement schedules
+    var retiredRegimens: [RetiredRegimen] = []     // id → name of deleted regimens, so history still renders
 
     init() {}
 
@@ -1171,6 +1286,8 @@ struct AppData: Codable {
         rings = (try? c.decode([RingDef].self, forKey: .rings)) ?? []
         earnedMilestones = (try? c.decode([EarnedMilestone].self, forKey: .earnedMilestones)) ?? []
         khatmah = try? c.decodeIfPresent(KhatmahPlan.self, forKey: .khatmah)
+        regimens = (try? c.decode([Regimen].self, forKey: .regimens)) ?? []
+        retiredRegimens = (try? c.decode([RetiredRegimen].self, forKey: .retiredRegimens)) ?? []
     }
 }
 
@@ -1384,10 +1501,12 @@ struct ModulePrefs: Codable, Equatable {
     var sleep = true
     var weather = true
     var quran = false                // Qur'an reading tracker — opt-in, like fasting
+    var regimen = true
     var order: [String] = ModulePrefs.defaultOrder
 
     /// Canonical order; "rings"/"habits"/"score" are core (always shown, but movable).
     static let defaultOrder = ["rings", "coach", "weather", "prayer", "quran", "fasting", "sleep", "health", "meals", "hydration",
+                               "regimen",
                                "quickLog", "habits", "score", "workStudy", "training", "photos"]
     static let coreKeys: Set<String> = ["rings", "habits", "score"]
 
@@ -1402,6 +1521,7 @@ struct ModulePrefs: Codable, Equatable {
         sleep = (try? c.decode(Bool.self, forKey: .sleep)) ?? true
         weather = (try? c.decode(Bool.self, forKey: .weather)) ?? true
         quran = (try? c.decode(Bool.self, forKey: .quran)) ?? false
+        regimen = (try? c.decode(Bool.self, forKey: .regimen)) ?? true
         let saved = (try? c.decode([String].self, forKey: .order)) ?? ModulePrefs.defaultOrder
         // Keep known keys in saved order, then append any new ones not yet present.
         var result = saved.filter { ModulePrefs.defaultOrder.contains($0) }
@@ -1423,6 +1543,7 @@ struct ModulePrefs: Codable, Equatable {
         case "health": return "Apple Health card"
         case "meals": return "Meals & calories"
         case "hydration": return "Hydration"
+        case "regimen": return "Meds & supplements"
         case "quickLog": return "Quick log"
         case "habits": return "Non-negotiables"
         case "score": return "Daily score"
@@ -1445,6 +1566,7 @@ struct ModulePrefs: Codable, Equatable {
         case "health": return health
         case "meals": return meals
         case "hydration": return hydration
+        case "regimen": return regimen
         case "quickLog": return quickLog
         case "workStudy": return workStudy
         case "training": return training
@@ -1464,6 +1586,7 @@ struct ModulePrefs: Codable, Equatable {
         case "health": health = v
         case "meals": meals = v
         case "hydration": hydration = v
+        case "regimen": regimen = v
         case "quickLog": quickLog = v
         case "workStudy": workStudy = v
         case "training": training = v

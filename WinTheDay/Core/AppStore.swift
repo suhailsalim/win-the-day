@@ -36,6 +36,7 @@ final class AppStore: ObservableObject {
         case "rings": return Theme.accentDark
         case "health": return Color(hex: 0xFB1E4B)
         case "hydration": return Color(hex: 0x2E8AE0)
+        case "regimen": return Color(hex: 0x2FA37E)
         case "workStudy": return Color(hex: 0x5B43E0)
         case "fasting": return Color(hex: 0x3B4A7C)
         case "quran": return Color(hex: 0x2F7D5E)
@@ -91,6 +92,7 @@ final class AppStore: ObservableObject {
         self.draft = loadDraft(for: today)
         loadThreads()
         scheduleMilestoneCheck()   // grants anything historical once, as a single summary
+        refreshRegimenNotifications()   // re-arms the `regimen-` prefix after installs / start dates
     }
 
     // MARK: - Module reordering
@@ -1006,6 +1008,173 @@ final class AppStore: ObservableObject {
     func deleteHabit(_ id: String) {
         data.habits.removeAll { $0.id == id }
         persistData(); publishSnapshot()
+    }
+
+    // MARK: - Medication & supplement regimens
+    //
+    // Adherence tracking only: the app records what the user says they took and when. It never
+    // suggests, adjusts, times or comments on a dose — not here, not in the UI, not via the coach.
+
+    static let regimenPrefix = "regimen-"
+
+    /// Active regimens, alphabetical (the editor shows inactive ones too, via `data.regimens`).
+    var activeRegimens: [Regimen] {
+        data.regimens.filter { $0.active }.sorted { $0.name.lowercased() < $1.name.lowercased() }
+    }
+
+    /// Regimens scheduled on a given day (weekday + start date), grouped by slot in canonical order.
+    /// Empty when nothing is due — Today's module hides itself on that.
+    func regimenSchedule(for dateString: String) -> [(slot: RegimenSlot, items: [Regimen])] {
+        let day = Self.parse(dateString)
+        let due = activeRegimens.filter { $0.scheduled(on: day) }
+        return RegimenSlot.allCases.compactMap { slot in
+            let items = due.filter { $0.timesOfDay.contains(slot.rawValue) }
+            return items.isEmpty ? nil : (slot, items)
+        }
+    }
+
+    func isRegimenTaken(_ id: String, slot: RegimenSlot, in e: Entry) -> Bool {
+        (e.regimenTaken[id] ?? []).contains(slot.rawValue)
+    }
+
+    /// When the dose was marked, for the "taken at 8:12 am" caption. nil for legacy/untimed marks.
+    func regimenTakenDate(_ id: String, slot: RegimenSlot, in e: Entry) -> Date? {
+        guard let epoch = e.regimenTakenAt["\(id)#\(slot.rawValue)"], epoch > 0 else { return nil }
+        return Date(timeIntervalSince1970: epoch)
+    }
+
+    /// Mark/unmark one dose on the day being viewed (past days included — travel backfill).
+    /// Records the marking timestamp the way prayers do.
+    func toggleRegimen(_ id: String, slot: RegimenSlot) {
+        let key = "\(id)#\(slot.rawValue)"
+        mutate { e in
+            var taken = e.regimenTaken[id] ?? []
+            if let i = taken.firstIndex(of: slot.rawValue) {
+                taken.remove(at: i)
+                e.regimenTakenAt[key] = nil
+            } else {
+                taken.append(slot.rawValue)
+                e.regimenTakenAt[key] = Date().timeIntervalSince1970
+            }
+            if taken.isEmpty { e.regimenTaken[id] = nil } else { e.regimenTaken[id] = taken }
+        }
+    }
+
+    func addRegimen(_ r: Regimen) {
+        data.regimens.append(r)
+        persistData()
+        refreshRegimenNotifications()
+    }
+
+    func updateRegimen(_ r: Regimen) {
+        guard let i = data.regimens.firstIndex(where: { $0.id == r.id }) else { return }
+        data.regimens[i] = r
+        persistData()
+        refreshRegimenNotifications()   // clears the whole prefix first, so edits never duplicate
+    }
+
+    /// Deleting keeps a `{id, name}` stub so past days' marks still render a name instead of an id.
+    func deleteRegimen(_ id: String) {
+        if let r = data.regimens.first(where: { $0.id == id }),
+           !data.retiredRegimens.contains(where: { $0.id == id }) {
+            data.retiredRegimens.append(RetiredRegimen(id: id, name: r.name))
+        }
+        data.regimens.removeAll { $0.id == id }
+        persistData()
+        refreshRegimenNotifications()
+    }
+
+    /// Display name for a regimen id — live, retired, or an honest fallback.
+    func regimenName(_ id: String) -> String {
+        if let r = data.regimens.first(where: { $0.id == id }), !r.name.isEmpty { return r.name }
+        if let r = data.retiredRegimens.first(where: { $0.id == id }), !r.name.isEmpty { return r.name }
+        return "Removed item"
+    }
+
+    /// Today's (or the viewed day's) doses: marked vs scheduled, plus what is still unmarked.
+    func regimenProgress(for dateString: String) -> (taken: Int, total: Int, unmarked: [String]) {
+        let e = entry(for: dateString) ?? Entry(date: dateString)
+        var taken = 0, total = 0
+        var unmarked: [String] = []
+        for (slot, items) in regimenSchedule(for: dateString) {
+            for r in items {
+                total += 1
+                if isRegimenTaken(r.id, slot: slot, in: e) { taken += 1 }
+                else { unmarked.append("\(r.name.isEmpty ? r.kind.label : r.name) (\(slot.label.lowercased()))") }
+            }
+        }
+        return (taken, total, unmarked)
+    }
+
+    /// Adherence over the last `days` *completed* days — today is excluded so an in-progress day
+    /// never reads as missed doses. nil when the regimen wasn't scheduled at all in the window.
+    func regimenAdherence(_ r: Regimen, days: Int = 30) -> (taken: Int, scheduled: Int)? {
+        let cal = Calendar.current
+        var taken = 0, scheduled = 0
+        for back in 1...max(1, days) {
+            guard let day = cal.date(byAdding: .day, value: -back, to: Date()),
+                  r.scheduled(on: day, calendar: cal) else { continue }
+            let slots = r.slots
+            scheduled += slots.count
+            let done = entry(for: Self.dateString(day))?.regimenTaken[r.id] ?? []
+            taken += slots.filter { done.contains($0.rawValue) }.count
+        }
+        return scheduled == 0 ? nil : (taken, scheduled)
+    }
+
+    /// One factual line for the coach's `getDay` — reporting only, never a prompt to take anything.
+    func regimenSummaryLine(for dateString: String) -> String? {
+        let p = regimenProgress(for: dateString)
+        guard p.total > 0 else { return nil }
+        let missed = p.unmarked.isEmpty ? "" : " Not marked: \(p.unmarked.joined(separator: ", "))."
+        return "Supplements/meds: \(p.taken) of \(p.total) scheduled doses marked taken.\(missed)"
+    }
+
+    /// Rebuild the whole `regimen-` notification set: clear the prefix, then re-add one repeating
+    /// weekly alarm per regimen × slot × scheduled weekday (convention 6). Repeating calendar
+    /// triggers only ever fire in the future, so past days are never notified about.
+    /// Silent no-op when notifications were never granted — this never re-prompts.
+    func refreshRegimenNotifications() {
+        let now = Date()
+        let alarms: [(id: String, title: String, body: String, weekday: Int, hour: Int)] =
+            data.regimens
+                .filter { $0.active && $0.remind && !$0.slots.isEmpty }
+                // A start date in the future gets its alarms on the next launch on/after that day.
+                .filter { $0.startEpoch <= 0 || Date(timeIntervalSince1970: $0.startEpoch) <= now }
+                .flatMap { r in
+                    r.slots.flatMap { slot in
+                        r.daysOfWeek.sorted().map { weekday in
+                            (id: "\(Self.regimenPrefix)\(r.id)-\(slot.rawValue)-\(weekday)",
+                             title: r.name.isEmpty ? r.kind.label : r.name,
+                             body: r.dose.trimmingCharacters(in: .whitespaces).isEmpty
+                                 ? "\(slot.label) dose is on your schedule — open to log it."
+                                 : "\(r.dose) \u{00b7} \(slot.label.lowercased()) on your schedule — open to log it.",
+                             weekday: weekday, hour: slot.hour)
+                        }
+                    }
+                }
+        let prefix = Self.regimenPrefix
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { note in
+            let granted = note.authorizationStatus == .authorized || note.authorizationStatus == .provisional
+            guard granted else { return }
+            center.getPendingNotificationRequests { reqs in
+                let ours = reqs.filter { $0.identifier.hasPrefix(prefix) }.map { $0.identifier }
+                center.removePendingNotificationRequests(withIdentifiers: ours)
+                for a in alarms {
+                    let content = UNMutableNotificationContent()
+                    content.title = a.title
+                    content.body = a.body
+                    content.sound = .default
+                    var comps = DateComponents()
+                    comps.weekday = a.weekday
+                    comps.hour = a.hour
+                    comps.minute = 0
+                    let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
+                    center.add(UNNotificationRequest(identifier: a.id, content: content, trigger: trigger))
+                }
+            }
+        }
     }
 
     // MARK: - Rings (Today ring row + custom rings)
@@ -2775,6 +2944,8 @@ final class AppStore: ObservableObject {
         lines.append("Calories: \(e.calories.isEmpty ? "none" : e.calories), protein: \(e.proteinG.isEmpty ? "none" : e.proteinG)g, water: \(e.waterMl)ml")
         lines.append("Meals — B:\(mealWithTime(e, "breakfast")) | L:\(mealWithTime(e, "lunch")) | D:\(mealWithTime(e, "dinner")) | S:\(mealWithTime(e, "snacks")) | Drinks:\(mealWithTime(e, "drinks"))")
         lines.append("Prayers: \(e.prayers.count)/5, study/focus: \(fmtT(e.studyHours))h")
+        // Adherence is reported as fact only — the coach must never advise on doses.
+        if let regimen = regimenSummaryLine(for: d) { lines.append(regimen) }
         return lines.joined(separator: "\n")
     }
 
@@ -2818,7 +2989,21 @@ final class AppStore: ObservableObject {
 
     func toolGetHealthIndex() -> String {
         let h = healthIndex()
-        return h.isEmpty ? "No health profile recorded yet." : h
+        // What the user has scheduled, plus 30-day adherence — factual record only. The coach must
+        // never advise on doses, timing, or interactions.
+        let regimens = activeRegimens.map { r -> String in
+            var bits = [r.name.isEmpty ? r.kind.label : r.name]
+            if !r.dose.isEmpty { bits.append(r.dose) }
+            bits.append(r.slots.map { $0.label.lowercased() }.joined(separator: "/"))
+            if let a = regimenAdherence(r), a.scheduled > 0 {
+                bits.append("30d adherence \(Int((Double(a.taken) / Double(a.scheduled) * 100).rounded()))%")
+            }
+            return "- " + bits.joined(separator: " \u{00b7} ")
+        }
+        let regimenSection = regimens.isEmpty ? "" :
+            "\n\nSCHEDULED MEDS/SUPPLEMENTS (user's own record; do not advise on doses)\n" + regimens.joined(separator: "\n")
+        if h.isEmpty && regimenSection.isEmpty { return "No health profile recorded yet." }
+        return (h.isEmpty ? "No health notes recorded yet." : h) + regimenSection
     }
 
     func toolGetTargets() -> String {
