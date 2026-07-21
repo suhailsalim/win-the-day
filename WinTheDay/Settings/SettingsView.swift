@@ -110,8 +110,10 @@ struct SettingsView: View {
             dataCard
             if !store.importMessage.isEmpty {
                 Text(store.importMessage)
-                    .font(.system(size: 13)).foregroundStyle(Color(hex: 0x3DA876))
-                    .frame(maxWidth: .infinity).padding(.top, 10)
+                    .font(.system(size: 13))
+                    .foregroundStyle(store.importMessage.hasPrefix("Restored") ? Color(hex: 0x3DA876) : Color(hex: 0xD86B4A))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.top, 10)
             }
             Text(autoBackupNote)
                 .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
@@ -131,7 +133,22 @@ struct SettingsView: View {
                       contentType: .json,
                       defaultFilename: "win-the-day-\(AppStore.dateString(Date()))") { _ in }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
-            if case .success(let url) = result { store.importJSON(from: url) }
+            if case .success(let url) = result { store.prepareImport(from: url) }
+        }
+        // Confirm before anything is overwritten. By now the archive is parsed and validated, but
+        // nothing has been written to disk.
+        .sheet(isPresented: Binding(get: { store.pendingSummary != nil },
+                                    set: { if !$0 { store.cancelPendingRestore() } })) {
+            if let summary = store.pendingSummary {
+                RestoreConfirmSheet(summary: summary,
+                                    onConfirm: { store.commitPendingRestore() },
+                                    onCancel: { store.cancelPendingRestore() })
+            }
+        }
+        .alert("Restored", isPresented: $store.restoreNeedsRelaunch) {
+            Button("OK") {}
+        } message: {
+            Text("Your backup is in. Close and reopen Win the Day so every screen picks up the restored data.")
         }
     }
 
@@ -814,7 +831,7 @@ struct SettingsView: View {
     private func fmt(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(format: "%.1f", d) }
 
     private var autoBackupNote: String {
-        let base = "Auto-backup saves everything — entries, library, labs, body comp & photos — to the Files app (On My iPhone → Win the Day) every time you leave the app, and it rides along in your iCloud device backup. Tap Back up to also drop a copy in iCloud Drive."
+        let base = "A backup holds everything on this device — entries, habits, targets, settings, coach chats, prayer/hydration/fasting setup, library, labs, body comp & photos. Your API keys are not included: they stay in the Keychain, so you'll re-enter them after a restore.\n\nAuto-backup writes to the Files app (On My iPhone → Win the Day) every time you leave the app, and it rides along in your iCloud device backup. Tap Back up to also drop a copy in iCloud Drive."
         if let d = store.lastAutoBackup {
             let f = DateFormatter(); f.dateFormat = "d MMM, h:mm a"
             return "Last auto-backup: \(f.string(from: d)).\n\n" + base
@@ -861,6 +878,96 @@ struct SettingsView: View {
             .buttonStyle(.plain)
         }
         .glassList()
+    }
+}
+
+// MARK: - Restore confirmation
+
+/// What's actually inside the chosen backup, shown before a single byte is overwritten.
+struct RestoreConfirmSheet: View {
+    let summary: BackupSummary
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    SectionHeader(text: "This backup")
+                    VStack(spacing: 0) {
+                        row("Made", value: madeText)
+                        Hairline()
+                        row("Days logged", value: "\(summary.days)")
+                        Hairline()
+                        row("Habits", value: "\(summary.habits)")
+                        Hairline()
+                        row("Photos", value: "\(summary.photos)")
+                        if summary.isFullArchive {
+                            Hairline()
+                            row("Coach chats", value: "\(summary.chats)")
+                        }
+                    }
+                    .glassList()
+
+                    Text(footnote)
+                        .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16).padding(.top, 10)
+
+                    Button {
+                        onConfirm()
+                        dismiss()
+                    } label: {
+                        Text("Replace my data")
+                            .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                            .frame(maxWidth: .infinity).padding(.vertical, 14)
+                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: 0xD86B4A)))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16).padding(.top, 18)
+
+                    Button {
+                        onCancel()
+                        dismiss()
+                    } label: {
+                        Text("Keep what's on this phone")
+                            .font(.system(size: 16)).foregroundStyle(Theme.accentDark)
+                            .frame(maxWidth: .infinity).padding(.vertical, 13)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
+                .padding(.horizontal, 16).padding(.bottom, 24)
+            }
+            .scrollIndicators(.hidden)
+            .background(WarmBackground())
+            .navigationTitle("Restore backup")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private func row(_ label: String, value: String) -> some View {
+        HStack {
+            Text(label).font(.system(size: 16)).foregroundStyle(Theme.ink)
+            Spacer()
+            Text(value).font(.system(size: 16)).foregroundStyle(Theme.tertiaryInk)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    private var madeText: String {
+        guard let d = summary.created else { return "Unknown" }
+        let f = DateFormatter(); f.dateFormat = "d MMM yyyy, h:mm a"
+        return f.string(from: d)
+    }
+
+    private var footnote: String {
+        let keys = "API keys aren\u{2019}t in backups — they stay in the Keychain, so re-enter yours in Settings afterwards."
+        if summary.isFullArchive {
+            return "Everything on this phone is replaced with the backup: entries, habits, targets, settings, coach chats and your prayer/hydration/fasting setup. \(keys)"
+        }
+        return "This is an older backup — it only carries entries, habits and photos, so your current settings are left alone. \(keys)"
     }
 }
 

@@ -2490,16 +2490,15 @@ final class AppStore: ObservableObject {
 
     // MARK: - Data export / import / reset
 
-    /// Serialize a complete backup (data + photos as base64).
+    /// Serialize a complete backup: every persisted UserDefaults blob plus the referenced photos.
+    /// In-memory state is flushed first so the archive matches what's on screen.
     private func makeBackupData() -> Data? {
-        var photos: [String: String] = [:]
-        for entry in data.entries.values {
-            for name in entry.photos where photos[name] == nil {
-                if let d = PhotoStore.rawData(name) { photos[name] = d.base64EncodedString() }
-            }
-        }
-        let bundle = BackupBundle(data: data, photos: photos)
-        return try? JSONEncoder().encode(bundle)
+        persistData()
+        persistSettings()
+        var names: Set<String> = []
+        for entry in data.entries.values { names.formUnion(entry.photos) }
+        let archive = BackupService.makeArchive(photoNames: names)
+        return try? JSONEncoder().encode(archive)
     }
 
     /// Build a complete backup and write it to a temp file for the share/export sheet.
@@ -2530,27 +2529,74 @@ final class AppStore: ObservableObject {
         lastAutoBackup = now
     }
 
-    func importJSON(from url: URL) {
+    // MARK: - Restore (two steps: preview, then commit)
+
+    /// Parsed and validated, waiting on the user's confirmation. Nothing has been written yet.
+    @Published var pendingRestore: BackupArchive?
+    @Published var pendingSummary: BackupSummary?
+    /// Set once a restore has landed — managers still hold their pre-restore state, so the UI asks
+    /// for a relaunch rather than trying to re-init every one of them live.
+    @Published var restoreNeedsRelaunch = false
+
+    /// Read + validate a backup file and stage it for confirmation. Writes nothing.
+    func prepareImport(from url: URL) {
         let needsStop = url.startAccessingSecurityScopedResource()
         defer { if needsStop { url.stopAccessingSecurityScopedResource() } }
         guard let raw = try? Data(contentsOf: url) else {
-            importMessage = "That file didn\u{2019}t look right — nothing changed."
+            importMessage = BackupService.RestoreError.unreadable.localizedDescription
             return
         }
-        if let bundle = try? JSONDecoder().decode(BackupBundle.self, from: raw), !bundle.data.entries.isEmpty || !bundle.photos.isEmpty {
-            for (name, b64) in bundle.photos {
-                if let d = Data(base64Encoded: b64) { PhotoStore.write(d, name: name) }
-            }
-            data = bundle.data
-        } else if let plain = try? JSONDecoder().decode(AppData.self, from: raw) {
-            data = plain   // older backups that were just AppData
-        } else {
-            importMessage = "That file didn\u{2019}t look right — nothing changed."
+        do {
+            let archive = try BackupService.parse(raw)
+            importMessage = ""
+            pendingSummary = BackupService.summary(archive)
+            pendingRestore = archive
+        } catch {
+            importMessage = (error as? LocalizedError)?.errorDescription
+                ?? BackupService.RestoreError.unreadable.localizedDescription
+        }
+    }
+
+    func cancelPendingRestore() {
+        pendingRestore = nil
+        pendingSummary = nil
+    }
+
+    /// Commit the staged archive, then reload everything this store owns. Managers (prayer,
+    /// hydration, fasting) keep their in-memory copies until the app is relaunched.
+    func commitPendingRestore() {
+        guard let archive = pendingRestore else { return }
+        do {
+            try BackupService.restore(archive)
+        } catch {
+            importMessage = (error as? LocalizedError)?.errorDescription
+                ?? BackupService.RestoreError.unreadable.localizedDescription
+            cancelPendingRestore()
             return
         }
-        persistData()
-        draft = loadDraft(for: date)
+        cancelPendingRestore()
+        reloadFromDefaults()
         importMessage = "Restored \(data.entries.count) days."
+        restoreNeedsRelaunch = true
+    }
+
+    /// Re-read every key this store caches in memory, after a restore replaced them on disk.
+    private func reloadFromDefaults() {
+        let d = UserDefaults.standard
+        data = AppData(); settings = AppSettings(); targets = Targets()
+        modules = ModulePrefs(); personal = Personalization()
+        load()
+        threads = []; activeThreadID = ""
+        loadThreads()
+        onboardingDone = d.bool(forKey: "onboarding_done_v1")
+        focusQueue = d.stringArray(forKey: focusQueueKey) ?? []
+        weekOutlook = d.string(forKey: "week_outlook") ?? ""
+        weekOutlookWeek = d.string(forKey: "week_outlook_week") ?? ""
+        weeklyReview = d.string(forKey: "weekly_review") ?? ""
+        weeklyReviewWeek = d.string(forKey: "weekly_review_week") ?? ""
+        dayTips = []; dayTipsSlot = ""
+        draft = loadDraft(for: date)
+        publishSnapshot()
     }
 
     func reset() {
