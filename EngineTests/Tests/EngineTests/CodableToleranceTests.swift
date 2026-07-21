@@ -181,6 +181,8 @@ final class CodableToleranceTests: XCTestCase {
         s.hkWrite = HKWriteFlags(calories: false, protein: false)
         s.calendarSync = true; s.remindersSync = true; s.visibleRingCount = 3
         s.appLockEnabled = true; s.appLockGraceMinutes = 15
+        s.smartReminders = false; s.smartStreakRule = false; s.smartDinnerRule = false
+        s.smartBedtimeRule = false; s.smartProteinRule = false; s.smartEveningHour = 22
         try roundTrip(s)
 
         var t = Targets()
@@ -529,6 +531,13 @@ final class CodableToleranceTests: XCTestCase {
         XCTAssertEqual(try decode(AppSettings.self, #"{"appLockGraceMinutes":0}"#).appLockGraceMinutes, 0)
         XCTAssertEqual(try decode(AppSettings.self, #"{"appLockGraceMinutes":999}"#).appLockGraceMinutes, 1)
         XCTAssertEqual(try decode(AppSettings.self, #"{"appLockGraceMinutes":-4}"#).appLockGraceMinutes, 1)
+    }
+
+    func testSmartEveningHourIsClampedOnDecode() throws {
+        XCTAssertEqual(try decode(AppSettings.self, #"{"smartEveningHour":31}"#).smartEveningHour, 23)
+        XCTAssertEqual(try decode(AppSettings.self, #"{"smartEveningHour":3}"#).smartEveningHour, 16)
+        // Settings saved before the smart-reminder fields existed still opt in by default.
+        XCTAssertTrue(try decode(AppSettings.self, #"{"provider":"openai"}"#).smartReminders)
     }
 
     func testModulePrefsOrderDropsUnknownKeysAndAppendsNewOnes() throws {

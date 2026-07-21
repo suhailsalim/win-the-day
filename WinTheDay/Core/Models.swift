@@ -1219,6 +1219,14 @@ struct AppSettings: Codable, Equatable {
     /// Grace periods offered in Settings, in minutes; anything else falls back to 1.
     static let appLockGraceOptions = [0, 1, 5, 15]
 
+    // Smart reminders (see Engines/ReminderEngine.swift) — master switch + one flag per rule.
+    var smartReminders = true
+    var smartStreakRule = true
+    var smartDinnerRule = true
+    var smartBedtimeRule = true
+    var smartProteinRule = true
+    var smartEveningHour = 20       // when the streak-at-risk nudge fires (16–23)
+
     init() {}
 
     init(from decoder: Decoder) throws {
@@ -1237,6 +1245,13 @@ struct AppSettings: Codable, Equatable {
         appLockEnabled = (try? c.decode(Bool.self, forKey: .appLockEnabled)) ?? false
         let grace = (try? c.decode(Int.self, forKey: .appLockGraceMinutes)) ?? 1
         appLockGraceMinutes = AppSettings.appLockGraceOptions.contains(grace) ? grace : 1
+        smartReminders = (try? c.decode(Bool.self, forKey: .smartReminders)) ?? true
+        smartStreakRule = (try? c.decode(Bool.self, forKey: .smartStreakRule)) ?? true
+        smartDinnerRule = (try? c.decode(Bool.self, forKey: .smartDinnerRule)) ?? true
+        smartBedtimeRule = (try? c.decode(Bool.self, forKey: .smartBedtimeRule)) ?? true
+        smartProteinRule = (try? c.decode(Bool.self, forKey: .smartProteinRule)) ?? true
+        let eveningHour = (try? c.decode(Int.self, forKey: .smartEveningHour)) ?? 20
+        smartEveningHour = min(23, max(16, eveningHour))
     }
 }
 
