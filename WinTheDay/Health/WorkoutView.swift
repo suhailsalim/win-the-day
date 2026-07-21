@@ -73,8 +73,8 @@ struct WorkoutView: View {
                     }
                     .foregroundStyle(on ? .white : Theme.ink)
                     .frame(maxWidth: .infinity).padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 13).fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Color.white.opacity(0.55))))
-                    .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(.white.opacity(on ? 0 : 0.6), lineWidth: 0.5))
+                    .background(RoundedRectangle(cornerRadius: 13).fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay)))
+                    .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.surfaceStroke.opacity(on ? 0 : 1), lineWidth: 0.5))
                 }
                 .buttonStyle(.plain)
             }
@@ -88,7 +88,7 @@ struct WorkoutView: View {
                     Button { applyTemplate(t) } label: {
                         Text(t.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
                             .padding(.horizontal, 13).padding(.vertical, 8)
-                            .background(Capsule().fill(Color.white.opacity(0.6)))
+                            .background(Capsule().fill(Theme.surfaceOverlay))
                             .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.3), lineWidth: 0.5))
                     }
                     .buttonStyle(.plain)
@@ -147,8 +147,8 @@ struct WorkoutView: View {
                 Image(systemName: "plus").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.accentDark).frame(width: 30, height: 30)
             }.buttonStyle(.plain)
         }
-        .background(Capsule().fill(Color.white.opacity(0.5)))
-        .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
+        .background(Capsule().fill(Theme.surfaceOverlay))
+        .overlay(Capsule().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
     }
 
     private var addExerciseButton: some View {

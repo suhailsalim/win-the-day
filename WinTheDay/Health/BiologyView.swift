@@ -100,8 +100,8 @@ struct BiologyView: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.6), lineWidth: 0.5)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay)
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.surfaceStroke, lineWidth: 0.5)))
         .padding(.top, 12)
     }
 
@@ -121,7 +121,7 @@ struct BiologyView: View {
                 .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.ink)
             trendArrow(item)
             Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Color(white: 0.27).opacity(0.3))
+                .foregroundStyle(Theme.quaternaryInk)
         }
         .padding(.horizontal, 16).padding(.vertical, 11)
         .contentShape(Rectangle())
@@ -167,7 +167,7 @@ struct BiologyView: View {
 
     private var disclaimer: some View {
         Text(BiologyStyle.rangeNote)
-            .font(.system(size: 12)).foregroundStyle(Color(white: 0.27).opacity(0.45))
+            .font(.system(size: 12)).foregroundStyle(Theme.quaternaryInk)
             .multilineTextAlignment(.center)
             .padding(.horizontal, 16).padding(.top, 18)
     }
@@ -194,7 +194,7 @@ struct BiologyDetailView: View {
                     readings
                     correlations
                     Text(BiologyStyle.rangeNote)
-                        .font(.system(size: 12)).foregroundStyle(Color(white: 0.27).opacity(0.45))
+                        .font(.system(size: 12)).foregroundStyle(Theme.quaternaryInk)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 16).padding(.top, 18)
                 }
@@ -210,7 +210,7 @@ struct BiologyDetailView: View {
     }
 
     private var header: some View {
-        GlassCard(padding: 16, cornerRadius: 24, tint: .white.opacity(0.46)) {
+        GlassCard(padding: 16, cornerRadius: 24, tint: Theme.surfaceOverlay) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(BiologyStyle.value(item.latest?.value, unit: nil))
@@ -296,7 +296,7 @@ struct BiologyDetailView: View {
                                 .font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Theme.ink)
                             if !p.unitRecognized {
                                 Text("unit not recognised").font(.system(size: 11))
-                                    .foregroundStyle(Color(hex: 0xD86B4A))
+                                    .foregroundStyle(Theme.coral)
                             }
                         }
                     }
@@ -435,7 +435,7 @@ enum BiologyStyle {
     static func color(_ s: BiologyCatalog.RangeStatus) -> Color {
         switch s {
         case .inRange: return Theme.sage
-        case .below, .above: return Color(hex: 0xD86B4A)
+        case .below, .above: return Theme.coral
         case .unknown: return Theme.tertiaryInk.opacity(0.5)
         }
     }
@@ -462,7 +462,7 @@ enum BiologyStyle {
     static func trendColor(_ t: BiologyCatalog.Trend, _ d: BiologyCatalog.Direction) -> Color {
         switch BiologyCatalog.trendIsGood(t, d) {
         case .some(true):  return Theme.sage
-        case .some(false): return Color(hex: 0xD86B4A)
+        case .some(false): return Theme.coral
         case .none:        return Theme.tertiaryInk
         }
     }
