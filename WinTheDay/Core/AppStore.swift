@@ -89,6 +89,7 @@ final class AppStore: ObservableObject {
         migrateExamIfNeeded()
         self.draft = loadDraft(for: today)
         loadThreads()
+        scheduleMilestoneCheck()   // grants anything historical once, as a single summary
     }
 
     // MARK: - Module reordering
@@ -459,6 +460,7 @@ final class AppStore: ObservableObject {
     }
 
     private func persistData() {
+        invalidateStatsCache()   // lifetime milestone stats are derived from `data`
         if let raw = try? JSONEncoder().encode(data) {
             UserDefaults.standard.set(raw, forKey: dataKey)
         }
@@ -555,6 +557,7 @@ final class AppStore: ObservableObject {
         }
         persistData()
         publishSnapshot()
+        scheduleMilestoneCheck()
     }
 
     /// Push the bits the home-screen widgets show into the shared App Group.
@@ -2597,6 +2600,9 @@ final class AppStore: ObservableObject {
         dayTips = []; dayTipsSlot = ""
         draft = loadDraft(for: date)
         publishSnapshot()
+        invalidateStatsCache()
+        // A backup written before milestones existed carries none — re-grant them from the data.
+        scheduleMilestoneCheck()
     }
 
     func reset() {
@@ -2614,6 +2620,109 @@ final class AppStore: ObservableObject {
     }
     func setModel(_ id: String) { updateSettings { $0.model = id } }
     func toggleHealthKit() { updateSettings { $0.healthkit.toggle() } }
+
+    // MARK: - Milestones (earned records — observed, never fed back into the day score)
+
+    /// The next thing the celebration surface should show, or nil. Set by `checkMilestones()`,
+    /// cleared by `dismissMilestone()` (which pops the queue if several landed together).
+    @Published var justEarned: MilestoneEvent?
+    private var milestoneQueue: [MilestoneDef] = []
+    private var milestoneTask: Task<Void, Never>?
+
+    /// Lifetime aggregation is a full pass over every entry, so it's cached until data changes
+    /// (`persistData()` clears it).
+    private var statsCache: MilestoneEngine.Stats?
+
+    func lifetimeStats() -> MilestoneEngine.Stats {
+        if let statsCache { return statsCache }
+        let s = computeLifetimeStats()
+        statsCache = s
+        return s
+    }
+
+    func invalidateStatsCache() { statsCache = nil }
+
+    /// Single pass over the logged days. Day counting is done on the stored `yyyy-MM-dd` keys, and
+    /// streaks reuse `dayWon` + `effectiveStatus` so rest/sick/travel protection means exactly the
+    /// same thing here as it does on Today.
+    private func computeLifetimeStats() -> MilestoneEngine.Stats {
+        var s = MilestoneEngine.Stats()
+        var facts: [MilestoneEngine.DayFact] = []
+        let habitCount = activeHabits.count
+        for e in sortedEntries() where e.isMeaningful {
+            s.daysLogged += 1
+            let sc = score(e)
+            let won = dayWon(e)
+            let perfect = habitCount > 0 && sc == habitCount
+            if won { s.daysWon += 1 }
+            if perfect { s.perfectDays += 1 }
+            s.prayersMarked += Double(e.prayers.count)
+            s.prayersOnTime += Double(e.prayers.records.values.filter {
+                $0.band == .promptOnTime || $0.band == .onTime
+            }.count)
+            s.workouts += Double(e.workouts.count)
+            s.waterMl += Double(e.waterMl)
+            s.studyHours += e.studyHours
+            s.photos += Double(e.photos.count)
+            if let sleep = e.sleep, sleep.asleepMin > 0 { s.sleepNights += 1 }
+            facts.append(MilestoneEngine.DayFact(key: e.date, won: won, perfect: perfect,
+                                                 isProtected: DayStatus.isProtected(effectiveStatus(for: e.date))))
+        }
+        s.currentStreak = Double(streak())
+        s.longestStreak = Double(MilestoneEngine.longestStreak(facts))
+        s.longestPerfectRun = Double(MilestoneEngine.longestPerfectRun(facts))
+        return s
+    }
+
+    /// Re-evaluate soon. Edits arrive keystroke-fast; milestones are in no hurry.
+    func scheduleMilestoneCheck() {
+        milestoneTask?.cancel()
+        milestoneTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
+            self?.checkMilestones()
+        }
+    }
+
+    /// Diff the catalog against what's already on record and append anything new. This only ever
+    /// appends: an earned milestone is permanent, so deleting old entries or a half-finished import
+    /// can never revoke one.
+    func checkMilestones(celebrate: Bool = true) {
+        let stats = lifetimeStats()
+        let fresh = MilestoneEngine.newlyEarned(stats: stats, already: data.earnedMilestones)
+        guard !fresh.isEmpty else { return }
+        let now = Date().timeIntervalSince1970
+        data.earnedMilestones.append(contentsOf: fresh.map { EarnedMilestone(id: $0.id, earnedEpoch: now) })
+        persistData()
+        guard celebrate else { return }
+        if fresh.count > 2 {
+            // Retroactive backfill (first launch after milestones shipped, or a restore) — one calm
+            // summary, never a stack of sheets.
+            milestoneQueue = []
+            justEarned = .batch(fresh.count)
+        } else if justEarned == nil {
+            justEarned = .earned(fresh[0])
+            milestoneQueue = Array(fresh.dropFirst())
+        } else {
+            milestoneQueue.append(contentsOf: fresh)
+        }
+    }
+
+    func dismissMilestone() {
+        justEarned = milestoneQueue.isEmpty ? nil : .earned(milestoneQueue.removeFirst())
+    }
+
+    /// Earned records, newest first, paired with their catalog definition (unknown ids are skipped
+    /// but stay in storage).
+    func earnedMilestones() -> [(def: MilestoneDef, earned: EarnedMilestone)] {
+        data.earnedMilestones
+            .compactMap { rec in MilestoneEngine.def(rec.id).map { (def: $0, earned: rec) } }
+            .sorted { $0.earned.earnedEpoch > $1.earned.earnedEpoch }
+    }
+
+    func upcomingMilestones(limit: Int = 3) -> [MilestoneEngine.Progress] {
+        MilestoneEngine.upcoming(stats: lifetimeStats(), earned: data.earnedMilestones, limit: limit)
+    }
 }
 
 private extension JSONEncoder {

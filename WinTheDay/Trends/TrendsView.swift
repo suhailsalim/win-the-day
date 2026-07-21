@@ -17,6 +17,7 @@ struct TrendsView: View {
                 eatingCard
                 microsCard
                 trainingCard
+                MilestonesCard()
                 rangePicker
                 charts
                 Text("The trend is the signal — daily scale noise isn\u{2019}t. Waist, photos and your jog are better proof than any single morning.")

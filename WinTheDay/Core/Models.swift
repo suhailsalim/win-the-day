@@ -1023,6 +1023,7 @@ struct AppData: Codable {
     var occasions: [Occasion] = []
     var healthNotes: [HealthNote] = []
     var rings: [RingDef] = []
+    var earnedMilestones: [EarnedMilestone] = []   // permanent earned records (Engines/Milestones.swift)
 
     init() {}
 
@@ -1041,6 +1042,7 @@ struct AppData: Codable {
         occasions = (try? c.decode([Occasion].self, forKey: .occasions)) ?? []
         healthNotes = (try? c.decode([HealthNote].self, forKey: .healthNotes)) ?? []
         rings = (try? c.decode([RingDef].self, forKey: .rings)) ?? []
+        earnedMilestones = (try? c.decode([EarnedMilestone].self, forKey: .earnedMilestones)) ?? []
     }
 }
 
