@@ -770,7 +770,7 @@ struct TodayView: View {
                 }
             }
             .glassList()
-            .padding(.bottom, 4)
+            .padding(.top, 10)
         }
     }
 
@@ -1576,6 +1576,7 @@ struct TodayView: View {
             .padding(.horizontal, 16).padding(.vertical, 13)
         }
         .glassList()
+        .padding(.top, 10)
     }
 
     private func labeledField(label: String, hint: String?, placeholder: String, binding: Binding<String>) -> some View {
