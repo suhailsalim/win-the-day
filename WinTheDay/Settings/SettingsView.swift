@@ -6,6 +6,7 @@ struct SettingsView: View {
     @EnvironmentObject var prayer: PrayerManager
     @EnvironmentObject var hydration: HydrationManager
     @EnvironmentObject var fasting: FastingManager
+    @EnvironmentObject var ramadan: RamadanManager
     @EnvironmentObject var calendar: CalendarManager
     @EnvironmentObject var lock: AppLock
     @Binding var confirmReset: Bool
@@ -574,7 +575,7 @@ struct SettingsView: View {
         .glassList()
     }
 
-    private let colorableModules = ["rings", "coach", "weather", "prayer", "quran", "fasting", "sleep", "health", "meals", "hydration",
+    private let colorableModules = ["rings", "coach", "weather", "prayer", "quran", "ramadan", "fasting", "sleep", "health", "meals", "hydration",
                                     "regimen",
                                     "quickLog", "habits", "score", "workStudy", "training", "photos"]
 
@@ -697,23 +698,70 @@ struct SettingsView: View {
                 }
             }
             Hairline()
+            // Ramadan mode: dates are auto-detected (Umm al-Qura ± a sighting adjustment) and suhoor
+            // /iftar come from the computed Fajr/Maghrib — never a hardcoded clock time.
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Ramadan mode").font(.system(size: 16)).foregroundStyle(Theme.ink)
-                    Text("Suhoor & iftar reminders from your prayer times")
+                    Text(ramadan.statusLine)
                         .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
                 }
                 Spacer()
-                ToggleRow(on: prayer.ramadanMode) { prayer.setRamadan(!prayer.ramadanMode); syncFastingModule() }
+                ToggleRow(on: ramadan.mode != .off) {
+                    ramadan.setMode(ramadan.mode == .off ? .auto : .off)
+                    syncFastingModule()
+                }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
+            if ramadan.mode != .off {
+                Hairline()
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Always on").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                        Text("Ignore the calendar and keep the mode on")
+                            .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                    }
+                    Spacer()
+                    ToggleRow(on: ramadan.mode == .on) {
+                        ramadan.setMode(ramadan.mode == .on ? .auto : .on)
+                        syncFastingModule()
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                Hairline()
+                stepperRow("Month started", value: ramadan.adjustmentLabel,
+                           dec: { ramadan.setDayAdjustment(ramadan.dayAdjustment - 1) },
+                           inc: { ramadan.setDayAdjustment(ramadan.dayAdjustment + 1) })
+                Hairline()
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Auto start & stop the fast").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                        Text("Opens at Fajr, closes at Maghrib \u{2014} ending it by hand always wins")
+                            .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                    }
+                    Spacer()
+                    ToggleRow(on: ramadan.autoFast) { ramadan.setAutoFast(!ramadan.autoFast) }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                Hairline()
+                stepperRow("Suhoor warning", value: "\(ramadan.suhoorLeadMinutes) min",
+                           dec: { ramadan.setSuhoorLead(ramadan.suhoorLeadMinutes - 5) },
+                           inc: { ramadan.setSuhoorLead(ramadan.suhoorLeadMinutes + 5) })
+                Hairline()
+                HStack {
+                    Text("Nudge 10 min before iftar").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                    Spacer()
+                    ToggleRow(on: ramadan.preIftarReminder) { ramadan.setPreIftarReminder(!ramadan.preIftarReminder) }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+            }
         }
         .glassList()
     }
 
     /// Show the Today fasting module whenever fasting or Ramadan mode is on.
     private func syncFastingModule() {
-        let want = fasting.enabled || prayer.ramadanMode
+        let want = fasting.enabled || ramadan.mode != .off
         if store.modules.enabled("fasting") != want {
             store.updateModules { $0.setEnabled("fasting", want) }
         }

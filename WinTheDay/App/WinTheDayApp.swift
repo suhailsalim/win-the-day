@@ -8,6 +8,7 @@ struct WinTheDayApp: App {
     @StateObject private var hydration = HydrationManager()
     @StateObject private var studyTimer = StudyTimer()
     @StateObject private var fasting = FastingManager()
+    @StateObject private var ramadan = RamadanManager()          // auto-detected Ramadan mode
     @StateObject private var calendar = CalendarManager()
     @StateObject private var weather = WeatherManager()
     @StateObject private var lock = AppLock()
@@ -23,6 +24,7 @@ struct WinTheDayApp: App {
                 .environmentObject(hydration)
                 .environmentObject(studyTimer)
                 .environmentObject(fasting)
+                .environmentObject(ramadan)
                 .environmentObject(calendar)
                 .environmentObject(weather)
                 .environmentObject(lock)
@@ -39,6 +41,10 @@ struct WinTheDayApp: App {
                 // first `.active`, and a Siri/widget write made before launch must not be lost.
                 .task { store.reconcileIntentWrites(prayerTimes: prayer.today, nextFajr: prayer.nextFajr) }
                 .task { windDownRouter.start() }
+                // Ramadan mode: wire the manager to its two peers, then keep it honest whenever the
+                // computed Maghrib moves (a new location, a new day, a method change).
+                .task { ramadan.attach(prayer: prayer, fasting: fasting); syncRamadan() }
+                .onChange(of: prayer.today?[.maghrib]) { _, _ in ramadan.refresh(force: true); syncRamadan() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
@@ -50,6 +56,8 @@ struct WinTheDayApp: App {
             // can persist our stale cache over it. Cheap no-op when nothing was written.
             if phase == .active {
                 store.reconcileIntentWrites(prayerTimes: prayer.today, nextFajr: prayer.nextFajr)
+                ramadan.refresh(force: true)   // the day may have rolled over while we were suspended
+                syncRamadan()
             }
             let on = store.settings.appLockEnabled
             switch phase {
@@ -59,5 +67,12 @@ struct WinTheDayApp: App {
             @unknown default: break
             }
         }
+    }
+
+    /// Push Ramadan's derived state into the store: the day's fasting flag (which the Eating timing
+    /// sub-score reads) and the once-per-Hijri-year taraweeh habit.
+    @MainActor private func syncRamadan() {
+        store.setRamadanFasting(ramadan.isFastingToday)
+        if ramadan.isActiveToday, ramadan.consumeTaraweehSeed() { store.seedTaraweehHabit() }
     }
 }

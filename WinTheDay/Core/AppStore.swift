@@ -39,6 +39,7 @@ final class AppStore: ObservableObject {
         case "regimen": return Color(hex: 0x2FA37E)
         case "workStudy": return Color(hex: 0x5B43E0)
         case "fasting": return Color(hex: 0x3B4A7C)
+        case "ramadan": return Color(hex: 0x4C5C96)
         case "quran": return Color(hex: 0x2F7D5E)
         case "sleep": return Color(hex: 0x6E7BFF)
         case "weather": return Color(hex: 0x2E8AE0)
@@ -531,6 +532,24 @@ final class AppStore: ObservableObject {
     /// Epoch of the latest meal logged today (for late-meal/readiness checks).
     func lastMealEpoch(_ e: Entry) -> Double? { e.mealTimes.values.max() }
     func dinnerEpoch(_ e: Entry) -> Double? { e.mealTimes["dinner"] }
+
+    // MARK: - Ramadan mode (see Managers/RamadanManager.swift)
+
+    /// Stamp today as a Ramadan fast (or clear it). Drives `EatingScorer`'s timing allowance, so it
+    /// is only ever written onto *today* — a past day keeps whatever it was actually lived as.
+    /// Idempotent: safe to call from a ticker and from every foreground.
+    func setRamadanFasting(_ on: Bool) {
+        guard isToday, draft.ramadanFasting != on else { return }
+        mutate { $0.ramadanFasting = on }
+    }
+
+    /// Seed Ramadan's optional taraweeh habit. `RamadanManager.consumeTaraweehSeed()` guarantees the
+    /// caller only asks once per Hijri year, so deleting the habit does not bring it back next launch.
+    func seedTaraweehHabit() {
+        let title = "Prayed Taraweeh"
+        guard !data.habits.contains(where: { $0.title == title }) else { return }
+        addHabit(HabitDef(title: title, pillar: .spirituality, link: .manual))
+    }
 
     /// Meal text plus its time, for prompts (e.g. "rice & curry (1:30 PM)").
     private func mealWithTime(_ e: Entry, _ key: String) -> String {
@@ -2040,7 +2059,8 @@ final class AppStore: ObservableObject {
             carbsG: n.carbs, fatG: n.fat, microRatios: microRatios,
             weightKg: Double(entry.weight) ?? 0, heightCm: targets.heightCm, ageYears: targets.ageYears,
             sexMale: targets.sexMale, activeKcal: entry.activeKcal, goal: targets.goal,
-            proteinTargetG: targets.protein, dinnerEpoch: entry.mealTimes["dinner"] ?? 0, referenceBedEpoch: bedRef)
+            proteinTargetG: targets.protein, dinnerEpoch: entry.mealTimes["dinner"] ?? 0, referenceBedEpoch: bedRef,
+            ramadanFasting: entry.ramadanFasting)
         return EatingScorer.compute(inputs)
     }
 

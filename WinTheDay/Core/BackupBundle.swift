@@ -43,6 +43,9 @@ enum BackupKeys {
         "hyd_target", "hyd_glass", "hyd_on", "hyd_interval", "hyd_start", "hyd_end",
         // FastingManager
         "fast_on", "fast_protocol", "fast_target", "fast_start", "fast_history",
+        // RamadanManager
+        "ramadan_mode", "ramadan_adjust", "ramadan_autofast", "ramadan_suhoor_lead",
+        "ramadan_pre_iftar", "ramadan_skips", "ramadan_autofast_day", "ramadan_seeded_year",
     ]
 }
 

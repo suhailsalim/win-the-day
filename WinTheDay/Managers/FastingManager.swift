@@ -71,6 +71,25 @@ final class FastingManager: ObservableObject {
         fastStartEpoch = 0
     }
 
+    // MARK: - Externally-set window (Ramadan mode)
+
+    /// Start a fast that began at a known moment rather than "now" — Ramadan's auto-fast opens the
+    /// window at the computed Fajr, which may already be hours in the past when the app is opened.
+    /// Never moves a fast that is already running (a manual start outranks the automation).
+    func startFast(at date: Date) {
+        guard fastStartEpoch == 0 else { return }
+        fastStartEpoch = date.timeIntervalSince1970
+    }
+
+    /// End the active fast at a known moment (Ramadan's Maghrib) so the recorded hours are the
+    /// window that was actually fasted, not "however long until the app was next opened".
+    func endFast(at date: Date) {
+        guard let start = fastStart else { return }
+        let hours = max(0, date.timeIntervalSince(start) / 3600)
+        recordCompletion(hours: hours, on: start)
+        fastStartEpoch = 0
+    }
+
     // MARK: - History & streak
 
     private func history() -> [String: Double] {

@@ -21,6 +21,10 @@ enum EatingScorer {
         var proteinTargetG: Double = 120 // fallback when weight is unknown
         var dinnerEpoch: Double = 0
         var referenceBedEpoch: Double = 0 // actual sleep.bedEpoch (past nights) or tonight's recommended bedtime
+        /// Ramadan mode stamped this day as a fast (`Entry.ramadanFasting`). Iftar is at Maghrib and
+        /// the night's eating is unavoidably compressed, so the timing sub-score must not mark the
+        /// day down for obeying the fast. A day flag, never a wall-clock guess.
+        var ramadanFasting: Bool = false
     }
 
     struct Result {
@@ -87,8 +91,12 @@ enum EatingScorer {
         } else { partial = true }
 
         if i.dinnerEpoch > 0, i.referenceBedEpoch > i.dinnerEpoch {
+            // A Ramadan fast can only be broken at Maghrib, so the 3h dinner-to-bed bar is a bar the
+            // day is physically unable to clear. Judge it from iftar reality instead (1.5h), which
+            // still rewards not eating right up to bedtime but never punishes the fast itself.
+            let needH: Double = i.ramadanFasting ? 1.5 : 3
             let gapH = (i.referenceBedEpoch - i.dinnerEpoch) / 3600
-            subs.append((0.12, gapH >= 3 ? 100 : max(0, gapH / 3 * 100)))
+            subs.append((0.12, gapH >= needH ? 100 : max(0, gapH / needH * 100)))
         } else { partial = true }
 
         guard !subs.isEmpty else {
