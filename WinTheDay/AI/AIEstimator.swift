@@ -7,6 +7,7 @@ enum AIError: LocalizedError {
     case badResponse
     case appleNoVision
     case appleUnavailable
+    case timedOut
 
     var errorDescription: String? {
         switch self {
@@ -14,10 +15,20 @@ enum AIError: LocalizedError {
         case .unsupported: return "This provider isn\u{2019}t available — pick another in Settings."
         case .http(let code, let msg): return "Provider error \(code): \(msg)"
         case .badResponse: return "The estimator returned something unexpected."
+        case .timedOut: return "The estimator took too long to answer — check your connection and try again."
         case .appleNoVision: return "Apple Intelligence runs on-device and can\u{2019}t read photos yet. Pick a cloud provider (Settings → Intelligence) to scan labels & reports."
         case .appleUnavailable: return "Apple Intelligence isn\u{2019}t available on this device. Enable Apple Intelligence in iOS Settings, or pick a cloud provider."
         }
     }
+}
+
+/// One proposed row from a meal photo: an unsaved `FoodEntry` plus the model's own confidence.
+/// Deliberately NOT persisted — `lowConfidence` only drives the hint in the approval sheet, and
+/// the photo it came from is never stored anywhere.
+struct MealPhotoRow: Identifiable, Equatable {
+    var entry: FoodEntry
+    var lowConfidence: Bool = false
+    var id: String { entry.id }
 }
 
 /// Routes completion / vision requests to the selected provider's REST API.
@@ -89,6 +100,46 @@ struct AIEstimator {
             return FoodEntry(name: name, qty: qty > 0 ? qty : 1, servingLabel: (d["serving"] as? String) ?? "",
                              kcal: num(d["kcal"]), protein: num(d["protein"]), carbs: num(d["carbs"]),
                              fat: num(d["fat"]), fiber: num(d["fiber"]), sodium: num(d["sodium"]), source: .llm)
+        }
+    }
+
+    /// Read a photographed plate into proposed food rows. Same JSON contract as `parseFoodItems`
+    /// (AppStore upgrades names it already knows to library values), plus the model's own
+    /// confidence flag. Vision-only — gate the UI on `Providers.supportsVision` first. The call is
+    /// capped at 30s so a stalled upload falls back to the freeform row instead of hanging.
+    func estimateMealPhoto(imageBase64: String, caption: String?, knownFoods: [CatalogItem],
+                           settings: AppSettings) async throws -> [MealPhotoRow] {
+        let prompt = Self.mealPhotoPrompt(caption: caption, knownFoods: knownFoods)
+        let out = try await Self.withTimeout(30) {
+            try await complete(prompt: prompt, imageBase64: imageBase64, settings: settings, jsonOnly: true)
+        }
+        guard let obj = Self.parseObject(out), let raw = obj["items"] as? [[String: Any]] else { throw AIError.badResponse }
+        let rows: [MealPhotoRow] = raw.compactMap { d in
+            guard let name = (d["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty else { return nil }
+            let qty = num(d["qty"])
+            let entry = FoodEntry(name: name, qty: qty > 0 ? qty : 1, servingLabel: (d["serving"] as? String) ?? "",
+                                  kcal: num(d["kcal"]), protein: num(d["protein"]), carbs: num(d["carbs"]),
+                                  fat: num(d["fat"]), fiber: num(d["fiber"]), sodium: num(d["sodium"]), source: .llm)
+            let low = ((d["confidence"] as? String) ?? "").lowercased().hasPrefix("low")
+            return MealPhotoRow(entry: entry, lowConfidence: low)
+        }
+        guard !rows.isEmpty else { throw AIError.badResponse }
+        return rows
+    }
+
+    /// Races a request against a deadline; the loser is cancelled so nothing keeps running.
+    private static func withTimeout<T: Sendable>(_ seconds: Double,
+                                                 _ work: @escaping @Sendable () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await work() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw AIError.timedOut
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else { throw AIError.timedOut }
+            return first
         }
     }
 
@@ -504,6 +555,32 @@ struct AIEstimator {
         {"meals":[{"label":"Breakfast","calories":0,"protein":0,"carbs":0,"fat":0,"fiber":0,"note":"short"}],"total":{"calories":0,"protein":0,"carbs":0,"fat":0,"fiber":0,"micros":[{"name":"Sodium","amount":0,"unit":"mg"}]}}
         Only include meals with content. Whole numbers. When you used a known-food value, say so in its note.
         """
+    }
+
+    static func mealPhotoPrompt(caption: String?, knownFoods: [CatalogItem]) -> String {
+        var lines = [
+            "A photo of a meal is attached. Identify every distinct food on the plate and estimate its per-serving nutrition. This is everyday Kerala / South Indian home cooking — use the plate, spoon and hand for scale and estimate portions realistically."
+        ]
+        if let caption, !caption.isEmpty {
+            lines.append("The user says: \u{201C}\(caption)\u{201D} — trust this over what you think you see.")
+        }
+        if !knownFoods.isEmpty {
+            let known = knownFoods.prefix(40).map { f in
+                "- \(f.name)\(f.serving.isEmpty ? "" : " (\(f.serving))"): \(Int(f.calories)) kcal, P\(Int(f.protein)) C\(Int(f.carbs)) F\(Int(f.fat))"
+            }.joined(separator: "\n")
+            lines.append("""
+            KNOWN FOODS LIBRARY — the user\u{2019}s own dishes with verified values from how THEY cook/portion. If a plate item matches one (even loosely), reuse that name and those values VERBATIM instead of guessing:
+            \(known)
+            """)
+        }
+        lines.append("""
+        Respond with ONLY this JSON, no prose or markdown:
+        {"items":[{"name":"Dosa","qty":2,"serving":"1 dosa","kcal":133,"protein":2.7,"carbs":24,"fat":3,"fiber":1.2,"sodium":240,"confidence":"high"}]}
+        qty = number of servings visible (whole or decimal). Whole numbers for kcal/sodium.
+        Set confidence to "low" when you can\u{2019}t tell what the dish is or how big the portion is — flag it rather than guessing confidently.
+        Only real, visible foods. If there is no food in the photo, return {"items":[]}.
+        """)
+        return lines.joined(separator: "\n\n")
     }
 
     static func parsePrompt(kind: CatalogKind, text: String?, hasImage: Bool) -> String {

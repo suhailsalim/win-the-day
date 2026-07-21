@@ -1490,6 +1490,28 @@ enum Providers {
         default: return model
         }
     }
+
+    /// Substrings that mark an open/local model as multimodal (llava, qwen2.5-vl, gemma-3, …).
+    private static let visionModelMarkers = [
+        "llava", "vision", "-vl", "vl-", "pixtral", "minicpm-v", "moondream", "internvl", "gemma3", "gemma-3"
+    ]
+
+    /// Can the selected provider + model actually take an image? Drives the photo affordances
+    /// (meal photo, label scan) — Apple Intelligence is on-device text-only and DeepSeek has no
+    /// vision endpoint (`complete` already sends it no image), while OpenRouter / Ollama / Ollama
+    /// Cloud depend entirely on the model picked, so those are allowlisted by model id.
+    static func supportsVision(provider: String, model: String, custom: String = "") -> Bool {
+        let id = apiModelID(provider: provider, model: model, custom: custom).lowercased()
+        switch provider {
+        case "openai", "anthropic", "gemini": return true
+        case "openrouter":
+            if ["claude", "gpt-4", "gpt-5", "gemini", "grok"].contains(where: { id.contains($0) }) { return true }
+            return visionModelMarkers.contains { id.contains($0) }
+        case "ollama", "ollamacloud":
+            return visionModelMarkers.contains { id.contains($0) }
+        default: return false   // apple (no image input), deepseek (text only)
+        }
+    }
 }
 
 // MARK: - Static content from the design

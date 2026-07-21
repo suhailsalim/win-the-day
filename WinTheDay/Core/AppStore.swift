@@ -1478,6 +1478,45 @@ final class AppStore: ObservableObject {
         return added
     }
 
+    /// Meal photo → *proposed*, not-yet-saved rows. Same library upgrade as `logMealText`, but
+    /// nothing is committed: photo portions run overconfident, so the caller shows an approval
+    /// sheet and calls `addFoodEntry` per kept row. Never throws — a failed call (offline, timeout,
+    /// unreadable photo) returns one editable freeform row plus a message, so there's no dead-end.
+    /// The image itself is never stored: it lives only in this call's request body.
+    func mealPhotoRows(imageBase64: String, caption: String, mealKey: String) async -> (rows: [MealPhotoRow], note: String) {
+        var rows: [MealPhotoRow] = []
+        var note = ""
+        let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            let parsed = try await estimator.estimateMealPhoto(
+                imageBase64: imageBase64, caption: trimmedCaption.isEmpty ? nil : trimmedCaption,
+                knownFoods: data.catalog.filter { $0.kind == .food }, settings: settings)
+            rows = parsed.map { row in
+                var r = row
+                r.entry.mealKey = mealKey
+                // Prefer the library's numbers, keep the model's portion — the source badge then
+                // reads "Your library" so the row says where its values came from.
+                if let known = FoodLookup.local(r.entry.name, catalog: data.catalog).first(where: { $0.source.trusted }) {
+                    r.entry.servingLabel = known.servingLabel.isEmpty ? r.entry.servingLabel : known.servingLabel
+                    r.entry.kcal = known.kcal; r.entry.protein = known.protein; r.entry.carbs = known.carbs
+                    r.entry.fat = known.fat; r.entry.fiber = known.fiber
+                    r.entry.sodium = known.sodium > 0 ? known.sodium : r.entry.sodium
+                    r.entry.micros = known.micros; r.entry.source = known.source
+                    r.lowConfidence = false
+                }
+                return r
+            }
+        } catch {
+            note = error.localizedDescription
+        }
+        if rows.isEmpty {
+            if note.isEmpty { note = "Couldn\u{2019}t make out any food in that photo." }
+            rows = [MealPhotoRow(entry: FoodEntry(mealKey: mealKey, name: "Photo meal \u{2014} describe it",
+                                                  servingLabel: "1 serving", source: .manual))]
+        }
+        return (rows, note)
+    }
+
     // MARK: - Quick logging
 
     func isLogged(_ itemID: String) -> Bool {
