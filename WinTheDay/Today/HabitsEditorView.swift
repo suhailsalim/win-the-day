@@ -114,7 +114,7 @@ struct HabitDetailView: View {
                                 }
                                 .onAppear { if habit.prayerNames.isEmpty { habit.prayerNames = [habit.prayerName] } }
                             }
-                            if habit.link == .steps || habit.link == .activeEnergy || habit.link == .studyHours {
+                            if habit.link == .steps || habit.link == .activeEnergy || habit.link == .studyHours || habit.link == .quran {
                                 Hairline()
                                 HStack {
                                     Text(thresholdLabel).frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(Theme.ink)
@@ -171,6 +171,7 @@ struct HabitDetailView: View {
         case .steps: return "Steps target"
         case .activeEnergy: return "Active kcal target"
         case .studyHours: return "Study hours target"
+        case .quran: return "Qur'an pages target (0 = khatmah pace)"
         default: return "Target"
         }
     }

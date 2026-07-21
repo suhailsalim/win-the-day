@@ -551,7 +551,7 @@ struct SettingsView: View {
         .glassList()
     }
 
-    private let colorableModules = ["rings", "coach", "weather", "prayer", "fasting", "sleep", "health", "meals", "hydration",
+    private let colorableModules = ["rings", "coach", "weather", "prayer", "quran", "fasting", "sleep", "health", "meals", "hydration",
                                     "quickLog", "habits", "score", "workStudy", "training", "photos"]
 
     private var moduleColorsCard: some View {

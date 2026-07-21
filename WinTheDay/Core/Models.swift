@@ -111,6 +111,7 @@ struct Entry: Codable, Equatable, Identifiable {
     // written the night before onto the day it belongs to — so a morning read is a plain lookup.
     var mainFocus = ""
     var mainFocusDone = false
+    var quranPages = 0               // Qur'an pages read this day (khatmah position is derived from these)
 
     var id: String { date }
 
@@ -152,6 +153,7 @@ struct Entry: Codable, Equatable, Identifiable {
         status = (try? c.decode(String.self, forKey: .status)) ?? "normal"
         mainFocus = (try? c.decode(String.self, forKey: .mainFocus)) ?? ""
         mainFocusDone = (try? c.decode(Bool.self, forKey: .mainFocusDone)) ?? false
+        quranPages = (try? c.decode(Int.self, forKey: .quranPages)) ?? 0
         // Migrate legacy non-negotiables into the new manual-habit state.
         if habitState.isEmpty {
             if nn.moved { habitState["moved"] = true }
@@ -168,6 +170,7 @@ struct Entry: Codable, Equatable, Identifiable {
         // A focus set the night before is the whole content of tomorrow's entry — without this the
         // first `commit()` of the new day would throw it away before the chip is ever seen.
         if !mainFocus.trimmingCharacters(in: .whitespaces).isEmpty { return true }
+        if quranPages > 0 { return true }   // the khatmah position is derived from saved entries
         if !logged.isEmpty || !foodEntries.isEmpty || !photos.isEmpty || prayers.anyTrue || waterMl > 0 || !workouts.isEmpty { return true }
         return [training, run, weight, steps, sms, calories, proteinG]
             .contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -290,13 +293,14 @@ enum RingSource: String, Codable, CaseIterable, Identifiable, Equatable {
 /// hours" ring — `Entry.studyHours` is already fed by real completed sessions (`logStudySession`,
 /// including Focus-mode sessions), so a separate metric would just fragment the same data.
 enum RingMetric: String, Codable, CaseIterable, Identifiable, Equatable {
-    case hydrationPct, studyGoalPct, proteinPct, unknown
+    case hydrationPct, studyGoalPct, proteinPct, quranPages, unknown
     var id: String { rawValue }
     var label: String {
         switch self {
         case .hydrationPct: return "Hydration goal"
         case .studyGoalPct: return "Study/work/focus hours goal"
         case .proteinPct: return "Protein target"
+        case .quranPages: return "Qur'an pages (khatmah pace)"
         case .unknown: return "Not configured"
         }
     }
@@ -398,10 +402,11 @@ enum Pillar: String, Codable, CaseIterable, Identifiable {
 
 /// How a habit is marked complete.
 enum HabitLinkType: String, Codable, CaseIterable, Identifiable {
-    case manual, protein, prayer, steps, activeEnergy, water, studyHours, sleep
+    case manual, protein, prayer, steps, activeEnergy, water, studyHours, sleep, quran
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .quran: return "Qur'an pages ≥ daily target"
         case .manual: return "Manual tap"
         case .protein: return "Protein ≥ target"
         case .prayer: return "A prayer prayed"
@@ -1145,6 +1150,7 @@ struct AppData: Codable {
     var healthNotes: [HealthNote] = []
     var rings: [RingDef] = []
     var earnedMilestones: [EarnedMilestone] = []   // permanent earned records (Engines/Milestones.swift)
+    var khatmah: KhatmahPlan?                      // active Qur'an reading plan (Engines/QuranProgress.swift)
 
     init() {}
 
@@ -1164,6 +1170,7 @@ struct AppData: Codable {
         healthNotes = (try? c.decode([HealthNote].self, forKey: .healthNotes)) ?? []
         rings = (try? c.decode([RingDef].self, forKey: .rings)) ?? []
         earnedMilestones = (try? c.decode([EarnedMilestone].self, forKey: .earnedMilestones)) ?? []
+        khatmah = try? c.decodeIfPresent(KhatmahPlan.self, forKey: .khatmah)
     }
 }
 
@@ -1376,10 +1383,11 @@ struct ModulePrefs: Codable, Equatable {
     var fasting = false
     var sleep = true
     var weather = true
+    var quran = false                // Qur'an reading tracker — opt-in, like fasting
     var order: [String] = ModulePrefs.defaultOrder
 
     /// Canonical order; "rings"/"habits"/"score" are core (always shown, but movable).
-    static let defaultOrder = ["rings", "coach", "weather", "prayer", "fasting", "sleep", "health", "meals", "hydration",
+    static let defaultOrder = ["rings", "coach", "weather", "prayer", "quran", "fasting", "sleep", "health", "meals", "hydration",
                                "quickLog", "habits", "score", "workStudy", "training", "photos"]
     static let coreKeys: Set<String> = ["rings", "habits", "score"]
 
@@ -1393,6 +1401,7 @@ struct ModulePrefs: Codable, Equatable {
         fasting = (try? c.decode(Bool.self, forKey: .fasting)) ?? false
         sleep = (try? c.decode(Bool.self, forKey: .sleep)) ?? true
         weather = (try? c.decode(Bool.self, forKey: .weather)) ?? true
+        quran = (try? c.decode(Bool.self, forKey: .quran)) ?? false
         let saved = (try? c.decode([String].self, forKey: .order)) ?? ModulePrefs.defaultOrder
         // Keep known keys in saved order, then append any new ones not yet present.
         var result = saved.filter { ModulePrefs.defaultOrder.contains($0) }
@@ -1408,6 +1417,7 @@ struct ModulePrefs: Codable, Equatable {
         case "coach": return "AI coach"
         case "weather": return "Weather"
         case "prayer": return "Prayer times"
+        case "quran": return "Qur'an reading"
         case "fasting": return "Fasting"
         case "sleep": return "Sleep & readiness"
         case "health": return "Apple Health card"
@@ -1429,6 +1439,7 @@ struct ModulePrefs: Codable, Equatable {
         case "coach": return coach
         case "weather": return weather
         case "prayer": return prayer
+        case "quran": return quran
         case "fasting": return fasting
         case "sleep": return sleep
         case "health": return health
@@ -1447,6 +1458,7 @@ struct ModulePrefs: Codable, Equatable {
         case "coach": coach = v
         case "weather": weather = v
         case "prayer": prayer = v
+        case "quran": quran = v
         case "fasting": fasting = v
         case "sleep": sleep = v
         case "health": health = v

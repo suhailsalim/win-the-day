@@ -24,6 +24,7 @@ enum RingEngine {
         var waterTargetMl: Double = 3000
         var studyGoalHours: Double = 4
         var proteinTargetG: Double = 120
+        var quranDailyTarget: Double = 0    // today's khatmah ask in pages (0 = no active plan)
         var prayerTimes: PrayerTimes?
         var nextFajr: Date?
     }
@@ -82,6 +83,14 @@ enum RingEngine {
             let logged = Double(entry.proteinG) ?? 0
             let frac = min(1, max(0, logged / target))
             return RingResult(fraction: frac, displayValue: "\(Int(logged))", caption: "of \(Int(target))g", band: band(frac), available: true)
+        case .quranPages:
+            // Target comes from the active khatmah (it moves as the plan redistributes), with a
+            // one-juz'-a-day fallback when no plan is running. Surplus reading caps the ring at
+            // 100% but is still credited to the plan itself.
+            let target = ctx.quranDailyTarget > 0 ? ctx.quranDailyTarget : Double(QuranProgress.pagesInOneJuz)
+            let frac = min(1, max(0, Double(entry.quranPages) / target))
+            return RingResult(fraction: frac, displayValue: "\(entry.quranPages)",
+                              caption: "of \(Int(target)) pages", band: band(frac), available: true)
         case .unknown:
             return RingResult(fraction: 0, displayValue: "—", caption: "Not configured", band: .mid, available: false)
         }

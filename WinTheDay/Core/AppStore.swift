@@ -38,6 +38,7 @@ final class AppStore: ObservableObject {
         case "hydration": return Color(hex: 0x2E8AE0)
         case "workStudy": return Color(hex: 0x5B43E0)
         case "fasting": return Color(hex: 0x3B4A7C)
+        case "quran": return Color(hex: 0x2F7D5E)
         case "sleep": return Color(hex: 0x6E7BFF)
         case "weather": return Color(hex: 0x2E8AE0)
         case "score": return Theme.sage
@@ -960,6 +961,9 @@ final class AppStore: ObservableObject {
         case .water: return Double(e.waterMl) >= (def.threshold > 0 ? def.threshold : waterTargetMl)
         case .studyHours: return e.studyHours >= (def.threshold > 0 ? def.threshold : targets.studyHours)
         case .sleep: return e.sleepScore >= (def.threshold > 0 ? Int(def.threshold) : 70)
+        // The plan's flat pace, not the redistributed daily target: this runs for every historical
+        // day when streaks are computed, so it has to stay O(1). Falls back to "read anything".
+        case .quran: return e.quranPages >= max(1, def.threshold > 0 ? Int(def.threshold) : quranDailyPages)
         }
     }
 
@@ -1049,10 +1053,83 @@ final class AppStore: ObservableObject {
     /// AppStore stays prayer-agnostic, same pattern as `togglePrayer`.
     func ringContext(prayerTimes: PrayerTimes?, nextFajr: Date?) -> RingEngine.Context {
         RingEngine.Context(waterTargetMl: waterTargetMl, studyGoalHours: targets.studyHours,
-                           proteinTargetG: targets.protein, prayerTimes: prayerTimes, nextFajr: nextFajr)
+                           proteinTargetG: targets.protein,
+                           quranDailyTarget: Double(quranStatus?.dailyTarget ?? 0),
+                           prayerTimes: prayerTimes, nextFajr: nextFajr)
     }
     func ringResult(_ def: RingDef, prayerTimes: PrayerTimes?, nextFajr: Date?) -> RingResult {
         RingEngine.compute(def, entry: draft, ctx: ringContext(prayerTimes: prayerTimes, nextFajr: nextFajr))
+    }
+
+    // MARK: - Qur'an reading (khatmah plan)
+
+    /// The plan's position is **derived** — `startPage + Σ Entry.quranPages since the start day` —
+    /// never a counter we mutate. Editing a past day therefore moves the position by exactly the
+    /// delta instead of re-adding the pages (a counter would drift; a sum cannot).
+    private func quranPages(from startDay: String, before day: String) -> Int {
+        data.entries.values.reduce(0) { sum, e in
+            (e.date >= startDay && e.date < day) ? sum + max(0, e.quranPages) : sum
+        }
+    }
+
+    /// The plan's start day as a yyyy-MM-dd key.
+    private func quranStartDay(_ plan: KhatmahPlan) -> String? {
+        guard plan.startEpoch > 0 else { return nil }
+        return Self.dateString(Date(timeIntervalSince1970: plan.startEpoch))
+    }
+
+    /// Whole days from the plan's start day to `day` (0 on the start day, nil before it).
+    private func quranDayIndex(_ plan: KhatmahPlan, on day: String) -> Int? {
+        guard let startDay = quranStartDay(plan), day >= startDay else { return nil }
+        let comps = Calendar.current.dateComponents([.day], from: Self.parse(startDay), to: Self.parse(day))
+        return max(0, comps.day ?? 0)
+    }
+
+    /// Plan status for one day — nil when there is no plan, or the day predates it.
+    func quranStatus(on day: String) -> QuranProgress.Status? {
+        guard let plan = data.khatmah, let startDay = quranStartDay(plan),
+              let idx = quranDayIndex(plan, on: day) else { return nil }
+        let today = day == draft.date ? draft.quranPages : (data.entries[day]?.quranPages ?? 0)
+        return QuranProgress.status(plan: plan,
+                                    pagesBeforeToday: quranPages(from: startDay, before: day),
+                                    pagesToday: today, dayIndex: idx)
+    }
+
+    /// Status for the day currently being viewed.
+    var quranStatus: QuranProgress.Status? { quranStatus(on: date) }
+
+    /// The active plan's flat pace in pages/day (0 = no plan). O(1) — see `isSatisfied`.
+    var quranDailyPages: Int { data.khatmah.map { QuranProgress.flatDailyPages($0) } ?? 0 }
+
+    func addQuranPages(_ n: Int) {
+        mutate { $0.quranPages = max(0, $0.quranPages + n) }
+        archiveKhatmahIfComplete()
+    }
+
+    /// Start (or restart) a khatmah on the day being viewed. `startPage` is where the reader
+    /// already is — restarting after a finished khatmah passes 0.
+    func startKhatmah(targetDays: Int, startPage: Int) {
+        var plan = data.khatmah ?? KhatmahPlan()
+        plan.startEpoch = Calendar.current.startOfDay(for: Self.parse(date)).timeIntervalSince1970
+        plan.targetDays = max(1, targetDays)
+        plan.startPage = min(max(0, startPage), QuranProgress.totalPages)
+        data.khatmah = plan
+        persistData(); objectWillChange.send()
+    }
+
+    func endKhatmah() {
+        data.khatmah = nil
+        persistData(); objectWillChange.send()
+    }
+
+    /// Finishing is recorded once and kept (`completedEpochs`), so the plan can be restarted rather
+    /// than frozen at 604 — and so the celebration doesn't fire again on every later edit.
+    private func archiveKhatmahIfComplete() {
+        guard var plan = data.khatmah, let st = quranStatus(on: date), st.isComplete,
+              (plan.completedEpochs.last ?? 0) < plan.startEpoch else { return }
+        plan.completedEpochs.append(Date().timeIntervalSince1970)
+        data.khatmah = plan
+        persistData(); objectWillChange.send()
     }
 
     func sortedEntries() -> [Entry] {
