@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<!--
+  Privacy policy.
+
+  This page has to be literally true of the shipping code, and it has to stay consistent
+  with the App Store privacy labels when the listing is written. Every claim below maps to
+  something in the repo: local JSON storage (Core/AppStore.swift), Keychain keys
+  (Core/Keychain.swift), the provider list (Core/Models.swift → Providers.all), Open-Meteo
+  (Managers/WeatherManager.swift) and Open Food Facts (Food/FoodLookup.swift). If any of
+  those change, change this page in the same commit.
+
+  Links are relative and one level up from the site root (see index.html's note).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Win the Day</title>
+<meta name="description" content="Win the Day has no accounts, no analytics and no servers we operate. Here is exactly what stays on your device and what leaves it.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../assets/icon.png">
+<link rel="apple-touch-icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="../index.html">
+      <img src="../assets/icon.png" alt="Win the Day app icon">
+      <span>Win the Day</span>
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../docs/">Docs</a>
+      <a href="../privacy/index.html">Privacy</a>
+      <a href="../support/index.html">Support</a>
+      <a href="https://github.com/suhailaka/win-the-day">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section>
+    <div class="wrap page">
+
+      <h1>Privacy Policy</h1>
+      <p class="meta">Effective 21 July 2026 &middot; Applies to the Win the Day iOS app, its Apple Watch app, its widgets, and this website.</p>
+
+      <div class="card">
+        <p class="note">
+          Short version: Win the Day has no accounts, no analytics, no tracking and no servers
+          operated by us. Your day lives on your phone. The only things that leave your device
+          are the text you hand to the AI provider you chose, your coordinates going to a free
+          weather service, and food searches going to a free food database.
+        </p>
+      </div>
+
+      <h2>Who we are</h2>
+      <p>
+        Win the Day is an independent app built by one developer. There is no company account
+        system, no user database, and no analytics or advertising SDK in the app. We do not
+        collect, receive, store, sell or share your personal data, because there is nowhere for
+        it to arrive.
+      </p>
+
+      <h2>What stays on your device</h2>
+      <p>Everything you log is stored locally on your iPhone:</p>
+      <ul>
+        <li>Daily entries — meals, habits, hydration, workouts, study sessions, prayers, notes.</li>
+        <li>Plans, routines, occasions and coach chat threads.</li>
+        <li>Settings, targets, ring configuration and module preferences.</li>
+        <li>Progress photos and imported lab or body-composition documents, kept in the app's own Documents folder.</li>
+        <li>AI provider API keys, kept in the iOS Keychain.</li>
+      </ul>
+      <p>
+        Widgets and the Apple Watch app read a small shared snapshot of this data through an
+        Apple App Group. That snapshot never leaves your devices. There is no cloud sync, so
+        your device backup (iCloud device backup or Finder) is the app's backup.
+      </p>
+
+      <h2>Apple Health</h2>
+      <p>
+        With your permission the app reads Apple Health data — steps, active energy, weight and
+        body composition, heart rate and HRV, sleep and workouts — and writes back what you log,
+        such as calories, protein, body measurements and workouts. HealthKit access is governed
+        entirely by iOS permissions, which you can review or revoke in the Health app at any
+        time. <strong>The app never transmits your Apple Health data anywhere.</strong> The only
+        exception is health text <em>you</em> deliberately submit to an AI feature, covered below.
+      </p>
+
+      <h2>What leaves your device</h2>
+
+      <h3>1. AI features — to the provider you choose</h3>
+      <p>
+        AI features only run when you invoke them, and only after you have selected a provider
+        and supplied its API key. When you use one, the relevant text is sent directly from your
+        device to that provider's API. That includes the meal text you are estimating, the
+        questions and context in a coach conversation, health notes or lab and body-composition
+        reports you submit for parsing, and photos you attach to an AI request.
+      </p>
+      <p>
+        The request goes from your phone to the provider — it does not pass through any server
+        of ours. Your data is then handled under <strong>that provider's</strong> privacy policy
+        and terms, not ours. The selectable providers are:
+      </p>
+      <ul>
+        <li><strong>Apple Intelligence</strong> — on-device or Apple's Private Cloud Compute; nothing leaves Apple's secure path.</li>
+        <li><strong>Ollama (local)</strong> — a model running on your own machine or network; nothing goes to a third party.</li>
+        <li><strong>Anthropic</strong>, <strong>OpenAI</strong>, <strong>Google Gemini</strong>, <strong>OpenRouter</strong>, <strong>DeepSeek</strong>, <strong>Ollama Cloud</strong> — third-party cloud APIs.</li>
+      </ul>
+      <p>
+        Please read the privacy terms of whichever provider you pick. If a piece of information
+        is too sensitive to share with a third party, use Apple Intelligence or a local Ollama
+        model, or simply don't run an AI feature on it — every score, prayer time, plan and log
+        in the app is deterministic and works with no AI at all.
+      </p>
+
+      <h3>2. Location — prayer times, Qibla and weather</h3>
+      <p>
+        If you grant location access, your coordinates are used <em>on your device</em> to
+        compute prayer times and the Qibla direction — that calculation is entirely local and
+        astronomical, with no lookup service involved. Your coordinates are sent off-device in
+        one case only: to <a href="https://open-meteo.com">Open-Meteo</a>, a free weather API, to
+        fetch your local forecast. No account, key or identifier is attached to that request.
+      </p>
+
+      <h3>3. Food lookups</h3>
+      <p>
+        When you scan a barcode or search the food database, the barcode or the search term is
+        sent to <a href="https://world.openfoodfacts.org">Open Food Facts</a>, a free public food
+        database, to fetch nutrition information. Nothing else about you is included.
+      </p>
+
+      <h2>Summary table</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Data</th><th>Where it lives</th><th>Does it leave the device?</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Daily logs, habits, plans, chat threads</td><td>On-device app storage</td><td>No</td></tr>
+            <tr><td>Progress photos, imported reports</td><td>The app's Documents folder</td><td>No</td></tr>
+            <tr><td>API keys</td><td>iOS Keychain</td><td>No — only as the auth header on your own AI requests</td></tr>
+            <tr><td>Apple Health data</td><td>Apple Health, under iOS permissions</td><td>No</td></tr>
+            <tr><td>Meal text, coach messages, notes and reports you submit to AI</td><td>Sent on demand</td><td><strong>Yes</strong> — to the AI provider you selected</td></tr>
+            <tr><td>Location</td><td>Used on-device for prayer times and Qibla</td><td>Coordinates go to Open-Meteo for weather only</td></tr>
+            <tr><td>Barcodes and food searches</td><td>Sent on demand</td><td>Yes — to Open Food Facts</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Children</h2>
+      <p>
+        The app is not directed at children under 13 and collects no data from anyone, including
+        children.
+      </p>
+
+      <h2>Your control</h2>
+      <ul>
+        <li>Revoke Health, location, calendar, reminders, notification or camera access at any time in iOS Settings.</li>
+        <li>Remove an API key in Settings &rarr; Intelligence to stop all cloud AI requests.</li>
+        <li>Deleting the app deletes its local data, including photos and its Keychain entries.</li>
+      </ul>
+      <p>
+        Because we hold no copy of your data, requests to access, correct, export or delete data
+        held by us have nothing to act on — your data is already only in your hands. For data you
+        sent to an AI provider, contact that provider directly.
+      </p>
+
+      <h2>This website</h2>
+      <p>
+        This site is static and hosted on GitHub Pages. It sets no cookies, loads no third-party
+        scripts or fonts, and runs no analytics. GitHub may log ordinary web-server request data
+        as its infrastructure provider.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        If the app's data handling changes, this page changes with it and the effective date
+        above is updated. Material changes will also be noted in the app's release notes.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions about privacy: <a href="mailto:suhails.letterbox@gmail.com">suhails.letterbox@gmail.com</a>.
+        You can also open an issue on
+        <a href="https://github.com/suhailaka/win-the-day/issues">GitHub</a>.
+      </p>
+
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <nav aria-label="Footer">
+      <a href="../index.html">Home</a>
+      <a href="../docs/">Docs</a>
+      <a href="../support/index.html">Support</a>
+      <a href="https://github.com/suhailaka/win-the-day">GitHub</a>
+    </nav>
+    <p class="fine">Win the Day is an independent iOS app. Built with SwiftUI. MIT licensed.</p>
+  </div>
+</footer>
+
+</body>
+</html>

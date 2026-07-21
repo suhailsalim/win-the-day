@@ -32,6 +32,25 @@ prototype (`design/`).
 
 Full feature docs: [`docs/`](docs/). Architecture: [`docs/architecture.md`](docs/architecture.md).
 
+## Website
+
+**<https://suhailaka.github.io/win-the-day/>** — landing page, hosted user guide
+(`/docs/`), [privacy policy](https://suhailaka.github.io/win-the-day/privacy/) and
+[support](https://suhailaka.github.io/win-the-day/support/).
+
+The site is static and free to run: `website/` holds hand-written HTML/CSS (no framework, no JS,
+no analytics) and `.github/workflows/site.yml` builds MkDocs into `_site/docs`, lays `website/`
+over the root, and deploys to GitHub Pages on every push to `main` touching `docs/`, `website/`
+or `mkdocs.yml`.
+
+- Preview the landing page by opening `website/index.html` in a browser — every link is
+  relative, so it works from `file://` too (the `docs/` links need the built site).
+- Preview the docs with `pip install 'mkdocs<2' 'mkdocs-material>=9.7,<10' && mkdocs serve`.
+- Screenshots are grey placeholders until real captures are dropped in — see
+  [`website/assets/README.md`](website/assets/README.md).
+- **One-time repo setting:** Settings → Pages → Build and deployment → Source =
+  **GitHub Actions** (a workflow can't set this itself).
+
 ## Build & run
 
 1. Open `WinTheDay.xcodeproj` in **Xcode 26+**.

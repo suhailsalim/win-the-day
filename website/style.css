@@ -1,0 +1,372 @@
+/* Win the Day — public site styles.
+   One hand-written stylesheet, no framework, no build step, no external requests.
+   The design language mirrors the app's UI/Theme.swift: a cool near-white base with soft
+   blobs behind translucent white "liquid glass" cards, graphite text, one indigo accent
+   and sage for anything positive. Fonts are the platform's own (SF on Apple devices) —
+   the app retired its serif face, so the site doesn't load one either. */
+
+:root {
+    /* Palette — hex values are the same ones in WinTheDay/UI/Theme.swift. */
+    --accent: #6470a6;          /* soft indigo (tints, secondary)  */
+    --accent-deep: #3b4a7c;     /* deep indigo (links, buttons)    */
+    --sage: #2fa36b;            /* positive / success              */
+    --ink: #16181f;             /* graphite text                   */
+    --ink-2: #5a6172;           /* cool slate                      */
+    --ink-3: #9096a6;           /* cool light slate                */
+
+    --bg-top: #f8fafd;
+    --bg-mid: #eff2f8;
+    --bg-bottom: #e8ecf4;
+
+    --glass: rgba(255, 255, 255, 0.62);
+    --glass-strong: rgba(255, 255, 255, 0.82);
+    --glass-stroke: rgba(255, 255, 255, 0.75);
+    --hairline: rgba(42, 51, 80, 0.10);
+    --shadow: rgba(42, 51, 80, 0.10);
+
+    --radius: 22px;
+    --measure: 1080px;
+
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto,
+        Helvetica, Arial, sans-serif;
+    --font-display: ui-rounded, -apple-system, BlinkMacSystemFont, "SF Pro Rounded",
+        "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* The app is a white-glass app, so light is the canonical look; dark mode is a faithful
+   translation of it rather than a different design. */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --accent: #9aa6df;
+        --accent-deep: #b3bdec;
+        --sage: #56c793;
+        --ink: #eef0f6;
+        --ink-2: #b3b9c9;
+        --ink-3: #838a9c;
+
+        --bg-top: #14161d;
+        --bg-mid: #171a23;
+        --bg-bottom: #1b1f2a;
+
+        --glass: rgba(255, 255, 255, 0.05);
+        --glass-strong: rgba(255, 255, 255, 0.08);
+        --glass-stroke: rgba(255, 255, 255, 0.10);
+        --hairline: rgba(255, 255, 255, 0.10);
+        --shadow: rgba(0, 0, 0, 0.35);
+    }
+
+    /* The dark accent is a light lavender, so the filled button needs dark label text. */
+    .btn-primary { color: var(--bg-top); }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+    margin: 0;
+    font-family: var(--font);
+    font-size: 17px;
+    line-height: 1.62;
+    color: var(--ink);
+    background: var(--bg-mid);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* The gradient base plus the soft cool blobs the glass refracts — decorative, and painted
+   on one fixed layer behind everything. Deliberately NOT `background-attachment: fixed` on
+   <body>: iOS Safari treats that inconsistently, and a fixed pseudo-element gives the same
+   "the background stays put while cards scroll over it" effect everywhere. */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(420px 420px at 12% 4%, rgba(143, 160, 216, 0.30), transparent 70%),
+        radial-gradient(460px 460px at 88% 22%, rgba(143, 200, 198, 0.24), transparent 70%),
+        radial-gradient(380px 380px at 25% 78%, rgba(180, 173, 224, 0.22), transparent 70%),
+        linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 45%, var(--bg-bottom) 100%);
+}
+
+img { max-width: 100%; height: auto; }
+
+a { color: var(--accent-deep); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    color: var(--ink);
+    margin: 0 0 12px;
+}
+
+h1 { font-size: clamp(2.3rem, 6vw, 3.6rem); }
+h2 { font-size: clamp(1.5rem, 3.4vw, 2rem); }
+h3 { font-size: 1.06rem; letter-spacing: -0.01em; }
+
+p { margin: 0 0 14px; }
+
+.wrap {
+    width: 100%;
+    max-width: var(--measure);
+    margin: 0 auto;
+    padding: 0 22px;
+}
+
+section { padding: 54px 0; }
+
+.section-head { margin-bottom: 26px; }
+.section-head p { color: var(--ink-2); max-width: 62ch; margin: 0; }
+
+.eyebrow {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 8px;
+}
+
+/* ---------- Glass surfaces (GlassCard in the app) ---------- */
+
+.card {
+    background: var(--glass);
+    border: 1px solid var(--glass-stroke);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px var(--shadow);
+    padding: 22px;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+
+a.card { display: block; color: inherit; }
+a.card:hover { text-decoration: none; border-color: var(--accent); }
+
+.grid { display: grid; gap: 16px; }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+/* ---------- Header ---------- */
+
+.site-header { padding: 22px 0 6px; }
+
+.site-header .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.brand img { width: 30px; height: 30px; border-radius: 8px; }
+
+.site-nav { display: flex; gap: 18px; font-size: 0.94rem; }
+.site-nav a { color: var(--ink-2); }
+.site-nav a:hover { color: var(--accent-deep); }
+
+/* ---------- Hero ---------- */
+
+.hero { padding-top: 40px; text-align: center; }
+.hero .app-icon {
+    width: 108px;
+    height: 108px;
+    border-radius: 24px;
+    box-shadow: 0 14px 34px var(--shadow);
+    margin-bottom: 22px;
+}
+.hero .tagline {
+    font-size: clamp(1.08rem, 2.3vw, 1.3rem);
+    color: var(--ink-2);
+    max-width: 40ch;
+    margin: 0 auto 8px;
+}
+.hero .sub {
+    color: var(--ink-3);
+    font-size: 0.98rem;
+    max-width: 52ch;
+    margin: 0 auto 26px;
+}
+
+.cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    align-items: center;
+}
+
+.btn {
+    display: inline-block;
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.97rem;
+    border: 1px solid transparent;
+}
+.btn-primary { background: var(--accent-deep); color: #fff; }
+.btn-primary:hover { text-decoration: none; opacity: 0.92; }
+.btn-ghost {
+    background: var(--glass-strong);
+    border-color: var(--glass-stroke);
+    color: var(--ink);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+.btn-ghost:hover { text-decoration: none; border-color: var(--accent); }
+
+.badge-note {
+    font-size: 0.82rem;
+    color: var(--ink-3);
+    margin: 14px 0 0;
+}
+
+/* ---------- Pillars ---------- */
+
+.pillar h3 { margin-bottom: 6px; }
+.pillar p { color: var(--ink-2); font-size: 0.96rem; margin: 0; }
+.pillar .mark {
+    display: inline-block;
+    width: 34px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--accent);
+    margin-bottom: 14px;
+}
+.pillar.sage .mark { background: var(--sage); }
+.pillar.deep .mark { background: var(--accent-deep); }
+
+/* ---------- Feature grid ---------- */
+
+.feature h3 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.feature p { color: var(--ink-2); font-size: 0.93rem; margin: 0; }
+.feature .more {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--accent-deep);
+}
+
+/* ---------- Screenshot strip ---------- */
+
+/* Each frame paints its screenshot as a background over a grey placeholder, so dropping a
+   real PNG into website/assets/ is all it takes — no markup change, and nothing looks
+   broken while the files are missing. */
+.shots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+.shot { margin: 0; }
+
+.shot-frame {
+    aspect-ratio: 9 / 19.5;
+    border-radius: 20px;
+    border: 1px solid var(--glass-stroke);
+    box-shadow: 0 8px 24px var(--shadow);
+    background-color: rgba(120, 128, 150, 0.16);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+}
+
+.shot-1 { background-image: url("assets/screenshot-1.png"); }
+.shot-2 { background-image: url("assets/screenshot-2.png"); }
+.shot-3 { background-image: url("assets/screenshot-3.png"); }
+.shot-4 { background-image: url("assets/screenshot-4.png"); }
+
+.shot figcaption {
+    margin-top: 10px;
+    font-size: 0.86rem;
+    color: var(--ink-2);
+    text-align: center;
+}
+
+/* ---------- Callout / privacy strip ---------- */
+
+.callout { text-align: center; }
+.callout h2 { margin-bottom: 10px; }
+.callout p { color: var(--ink-2); max-width: 64ch; margin: 0 auto 8px; }
+
+/* ---------- Prose pages (privacy, support) ---------- */
+
+.page { max-width: 760px; margin: 0 auto; }
+.page h1 { font-size: clamp(2rem, 5vw, 2.7rem); margin-bottom: 6px; }
+.page h2 { font-size: 1.3rem; margin: 30px 0 10px; }
+.page h3 { margin: 22px 0 6px; }
+.page .meta { color: var(--ink-3); font-size: 0.9rem; margin-bottom: 26px; }
+.page ul { padding-left: 20px; margin: 0 0 14px; }
+.page li { margin-bottom: 7px; }
+.page .card + .card { margin-top: 16px; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.93rem;
+    margin: 6px 0 14px;
+}
+th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: top;
+}
+th { font-weight: 600; color: var(--ink); }
+td { color: var(--ink-2); }
+tr:last-child td { border-bottom: 0; }
+
+.table-scroll { overflow-x: auto; }
+
+.note {
+    border-left: 3px solid var(--accent);
+    padding-left: 14px;
+    color: var(--ink-2);
+    font-size: 0.95rem;
+}
+
+/* ---------- Footer ---------- */
+
+.site-footer {
+    padding: 34px 0 44px;
+    border-top: 1px solid var(--hairline);
+    margin-top: 30px;
+}
+.site-footer .wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 26px;
+    align-items: center;
+    justify-content: space-between;
+}
+.site-footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
+.site-footer a { color: var(--ink-2); font-size: 0.92rem; }
+.site-footer a:hover { color: var(--accent-deep); }
+.site-footer .fine { color: var(--ink-3); font-size: 0.86rem; margin: 0; }
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 900px) {
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .shots { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px) {
+    body { font-size: 16px; }
+    section { padding: 40px 0; }
+    .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .shots { grid-template-columns: repeat(2, 1fr); }
+    .site-header .wrap { flex-direction: column; align-items: flex-start; gap: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+}
