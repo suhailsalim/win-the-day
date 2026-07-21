@@ -1,5 +1,17 @@
 import SwiftUI
 
+/// `MilestoneTier.tintHex` stays a raw hex so the engine file can remain Foundation-only; the
+/// SwiftUI side resolves it to the adaptive token of the same hue so badges survive dark mode.
+extension MilestoneTier {
+    var tint: Color {
+        switch self {
+        case .early:  return Theme.accent      // 0x6470A6
+        case .steady: return Theme.sage        // 0x2FA36B
+        case .rare:   return Theme.accentDark  // 0x3B4A7C
+        }
+    }
+}
+
 /// Milestones on Trends: what you've already earned, the lifetime totals behind it, and — quietly,
 /// at the bottom — what the next records happen to be. No countdowns, no expiry, no nagging.
 struct MilestonesCard: View {
@@ -59,8 +71,8 @@ struct MilestonesCard: View {
                                 }
                                 GeometryReader { geo in
                                     ZStack(alignment: .leading) {
-                                        Capsule().fill(Color(white: 0.5).opacity(0.15)).frame(height: 6)
-                                        Capsule().fill(Color(hex: p.def.tier.tintHex))
+                                        Capsule().fill(Theme.tertiaryInk.opacity(0.15)).frame(height: 6)
+                                        Capsule().fill(p.def.tier.tint)
                                             .frame(width: geo.size.width * p.fraction, height: 6)
                                     }
                                 }
@@ -99,7 +111,7 @@ struct MilestoneBadge: View {
         HStack(spacing: 10) {
             Image(systemName: def.symbol)
                 .font(.system(size: 16))
-                .foregroundStyle(Color(hex: def.tier.tintHex))
+                .foregroundStyle(def.tier.tint)
                 .frame(width: 26)
             VStack(alignment: .leading, spacing: 2) {
                 Text(def.title).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.ink)
@@ -113,8 +125,8 @@ struct MilestoneBadge: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.5))
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+                .fill(Theme.surfaceOverlay)
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
         )
     }
 
@@ -195,11 +207,14 @@ struct MilestoneCelebrationSheet: View {
 
     /// Render the card itself as an image so sharing sends the milestone, not a screenshot.
     @MainActor private func renderShare(_ def: MilestoneDef) -> UIImage? {
+        // The shared image is a fixed light card wherever it lands, so it is rendered in the light
+        // scheme explicitly — otherwise the theme inks resolve near-white on this pale background.
         let renderer = ImageRenderer(content:
             MilestoneShareCard(def: def)
                 .padding(24)
                 .frame(width: 360)
                 .background(Color(hex: 0xF4F6FB))
+                .environment(\.colorScheme, .light)
         )
         renderer.scale = 3
         return renderer.uiImage
@@ -214,7 +229,7 @@ struct MilestoneShareCard: View {
         VStack(spacing: 12) {
             Image(systemName: def.symbol)
                 .font(.system(size: 40))
-                .foregroundStyle(Color(hex: def.tier.tintHex))
+                .foregroundStyle(def.tier.tint)
             Text(def.title)
                 .font(Theme.serif(30)).foregroundStyle(Theme.ink)
                 .multilineTextAlignment(.center)

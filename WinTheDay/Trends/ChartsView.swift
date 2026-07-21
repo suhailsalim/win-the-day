@@ -36,7 +36,7 @@ struct LineChartView: View {
             }
             if let target {
                 RuleMark(y: .value("target", target))
-                    .foregroundStyle(Color(white: 0.27).opacity(0.4))
+                    .foregroundStyle(Theme.quaternaryInk)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
             }
         }
@@ -79,7 +79,7 @@ struct BarChartView: View {
             }
             if let target {
                 RuleMark(y: .value("target", target))
-                    .foregroundStyle(Color(white: 0.27).opacity(0.4))
+                    .foregroundStyle(Theme.quaternaryInk)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
             }
         }

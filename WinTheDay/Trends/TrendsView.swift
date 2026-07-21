@@ -68,7 +68,7 @@ struct TrendsView: View {
     }
 
     private var weeklyReviewCard: some View {
-        GlassCard(padding: 16, cornerRadius: 22, tint: .white.opacity(0.5)) {
+        GlassCard(padding: 16, cornerRadius: 22, tint: Theme.surfaceOverlay) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     HStack(spacing: 7) {
@@ -100,7 +100,7 @@ struct TrendsView: View {
         let t = store.targets
         let unit = t.prizeUnit.isEmpty ? "" : " \(t.prizeUnit)"
         let targetPrefix = t.prizeLowerIsBetter ? "≤" : "≥"
-        return GlassCard(padding: 18, cornerRadius: 24, tint: .white.opacity(0.42)) {
+        return GlassCard(padding: 18, cornerRadius: 24, tint: Theme.surfaceOverlay) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("THE PRIZE · \(t.prizeName.uppercased())")
                     .font(.system(size: 11.5, weight: .semibold)).tracking(0.5)
@@ -108,9 +108,10 @@ struct TrendsView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text("\(fmt(t.prizeCurrent))\(unit)")
                         .font(Theme.serif(50)).foregroundStyle(Theme.ink)
-                    Text("→").font(.system(size: 20)).foregroundStyle(Color(white: 0.27).opacity(0.4))
+                    Text("→").font(.system(size: 20)).foregroundStyle(Theme.quaternaryInk)
                     Text("\(targetPrefix)\(fmt(t.prizeTarget))\(unit)")
-                        .font(Theme.serif(50)).foregroundStyle(Color(hex: 0x3DA876))
+                        .font(Theme.serif(50))
+                        .foregroundStyle(Theme.adaptive(light: 0x3DA876, darkGrey: 0x5FD79C))
                 }
                 Text("Your one priority metric. Update it in Settings → The prize\(t.prizeName.lowercased().contains("visceral") ? ", or import an InBody report on the Health tab." : ".")")
                     .font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
@@ -136,8 +137,8 @@ struct TrendsView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(.ultraThinMaterial)
-                        .overlay(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.5)))
-                        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+                        .overlay(RoundedRectangle(cornerRadius: 18).fill(Theme.surfaceOverlay))
+                        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
                 )
             }
         }
@@ -152,7 +153,7 @@ struct TrendsView: View {
         let bodyFat = store.bodyFatSeries()
         if bodyFat.count >= 2 {
             ChartCard(title: "Body fat", sub: String(format: "%.1f%%", bodyFat.last ?? 0)) {
-                LineChartView(values: win(bodyFat), color: Color(hex: 0xD86B4A))
+                LineChartView(values: win(bodyFat), color: Theme.coral)
             }
         }
 
@@ -168,7 +169,8 @@ struct TrendsView: View {
             ChartCard(title: "Daily score", sub: "streak \(store.streak())d") {
                 BarChartView(points: scores.enumerated().map {
                     BarPoint(x: $0.offset, y: Double($0.element),
-                             color: $0.element >= 3 ? Theme.sage : Color(hex: 0xD9CFC2))
+                             color: $0.element >= 3 ? Theme.sage
+                                                    : Theme.adaptive(light: 0xD9CFC2, darkGrey: 0x6E6559))
                 }, maxValue: 5)
             }
         }
@@ -207,7 +209,7 @@ struct TrendsView: View {
         let series = store.readinessSeries()
         if series.count >= 2 {
             ChartCard(title: "Readiness", sub: "last \(series.count) days") {
-                LineChartView(values: series, color: Color(hex: 0x6E7BFF), target: 70)
+                LineChartView(values: series, color: Theme.adaptive(light: 0x6E7BFF, darkGrey: 0x9AA4FF), target: 70)
             }
             .padding(.top, 12)
         }
@@ -228,7 +230,7 @@ struct TrendsView: View {
                     let sign = bal.projectedKg >= 0 ? "+" : ""
                     HStack(alignment: .firstTextBaseline, spacing: 5) {
                         Text("\(sign)\(String(format: "%.2f", bal.projectedKg)) kg").font(Theme.serif(28))
-                            .foregroundStyle(bal.projectedKg > 0 ? Color(hex: 0xD86B4A) : Theme.sage)
+                            .foregroundStyle(bal.projectedKg > 0 ? Theme.coral : Theme.sage)
                         Text("projected this week").font(.system(size: 12.5)).foregroundStyle(Theme.secondaryInk)
                     }
                     Text("From \(Int(bal.netKcalWeek)) kcal net balance over \(bal.daysScored) logged day\(bal.daysScored == 1 ? "" : "s") vs. your activity-adjusted TDEE (Mifflin–St Jeor + active energy).")
@@ -236,9 +238,9 @@ struct TrendsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     if bal.aggressive {
                         HStack(spacing: 5) {
-                            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11)).foregroundStyle(Color(hex: 0xD86B4A))
+                            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11)).foregroundStyle(Theme.coral)
                             Text("This rate looks aggressive — a sudden jump can also be water, especially after a high-sodium day, not fat.")
-                                .font(.system(size: 12)).foregroundStyle(Color(hex: 0xD86B4A))
+                                .font(.system(size: 12)).foregroundStyle(Theme.coral)
                         }
                     }
                     if store.targets.heightCm == 170 && store.targets.ageYears == 30 {
@@ -289,7 +291,7 @@ struct TrendsView: View {
                     ForEach(items) { m in
                         let pct = Int((m.amount / m.rda * 100).rounded())
                         let full = m.ratio >= 0.999
-                        let barColor: Color = m.limit ? (m.amount > m.rda ? Color(hex: 0xD86B4A) : Theme.sage)
+                        let barColor: Color = m.limit ? (m.amount > m.rda ? Theme.coral : Theme.sage)
                                                        : (full ? Theme.sage : Theme.accent)
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {
@@ -301,7 +303,7 @@ struct TrendsView: View {
                             }
                             GeometryReader { geo in
                                 ZStack(alignment: .leading) {
-                                    Capsule().fill(Color(white: 0.5).opacity(0.15)).frame(height: 6)
+                                    Capsule().fill(Theme.tertiaryInk.opacity(0.15)).frame(height: 6)
                                     Capsule().fill(barColor)
                                         .frame(width: geo.size.width * min(1, m.amount / m.rda), height: 6)
                                 }
@@ -335,7 +337,7 @@ struct TrendsView: View {
                     ForEach(rows, id: \.0.id) { r, taken, scheduled in
                         let ratio = Double(taken) / Double(scheduled)
                         let pct = Int((ratio * 100).rounded())
-                        let barColor: Color = pct < 80 ? Color(hex: 0xD86B4A) : Theme.sage
+                        let barColor: Color = pct < 80 ? Theme.coral : Theme.sage
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {
                                 Text(r.name).font(.system(size: 13)).foregroundStyle(Theme.ink)
@@ -344,7 +346,7 @@ struct TrendsView: View {
                             }
                             GeometryReader { geo in
                                 ZStack(alignment: .leading) {
-                                    Capsule().fill(Color(white: 0.5).opacity(0.15)).frame(height: 6)
+                                    Capsule().fill(Theme.tertiaryInk.opacity(0.15)).frame(height: 6)
                                     Capsule().fill(barColor).frame(width: geo.size.width * min(1, ratio), height: 6)
                                 }
                             }
