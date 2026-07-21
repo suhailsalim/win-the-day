@@ -141,7 +141,7 @@ struct RingCreatorView: View {
     private func swatchButton(_ hex: UInt) -> some View {
         Button { ring.colorHex = hex } label: {
             Circle()
-                .fill(hex == 0 ? AnyShapeStyle(Color(white: 0.5).opacity(0.2)) : AnyShapeStyle(Color(hex: hex)))
+                .fill(hex == 0 ? AnyShapeStyle(Theme.tertiaryInk.opacity(0.2)) : AnyShapeStyle(Color(hex: hex)))
                 .frame(width: 24, height: 24)
                 .overlay(Circle().stroke(Theme.ink, lineWidth: ring.colorHex == hex ? 2 : 0))
         }.buttonStyle(.plain)

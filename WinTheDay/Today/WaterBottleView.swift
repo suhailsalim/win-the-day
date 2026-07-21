@@ -12,8 +12,8 @@ struct WaterBottleView: View {
         let bottle = BottleShape()
         return ZStack {
             // glass
-            bottle.fill(Color.white.opacity(0.45))
-            bottle.stroke(Color.white.opacity(0.8), lineWidth: 1.5)
+            bottle.fill(Theme.surfaceOverlay)
+            bottle.stroke(Theme.surfaceStroke, lineWidth: 1.5)
 
             // water — a STATIC wavy surface. The previous TimelineView(.animation) redrew this
             // at the display's full refresh rate (60–120 fps) forever, rebuilding the sine polyline
@@ -25,7 +25,8 @@ struct WaterBottleView: View {
                 let fillHeight = h * clamped
                 ZStack(alignment: .bottom) {
                     Wave(phase: 0, amplitude: clamped > 0.02 ? 5 : 0)
-                        .fill(LinearGradient(colors: [Color(hex: 0x6FB7FF), Color(hex: 0x2E8AE0)],
+                        .fill(LinearGradient(colors: [Theme.adaptive(light: 0x6FB7FF, darkGrey: 0x8CC8FF),
+                                                      Theme.adaptive(light: 0x2E8AE0, darkGrey: 0x4E9FE8)],
                                              startPoint: .top, endPoint: .bottom))
                         .frame(height: max(0, fillHeight) + 12)
                         .offset(y: 6)

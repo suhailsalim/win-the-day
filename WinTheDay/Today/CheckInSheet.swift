@@ -95,8 +95,8 @@ struct CheckInSheet: View {
                     .buttonStyle(.plain)
                 }
             }
-            .background(Color.white.opacity(0.5)).clipShape(Capsule())
-            .overlay(Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+            .background(Theme.surfaceOverlay).clipShape(Capsule())
+            .overlay(Capsule().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
         }
     }
 }
