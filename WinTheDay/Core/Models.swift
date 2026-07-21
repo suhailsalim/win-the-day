@@ -1212,6 +1212,12 @@ struct AppSettings: Codable, Equatable {
     var calendarSync = false
     var remindersSync = false
     var visibleRingCount = 4        // 3 or 4 — how many rings show in the Today ring row
+    // App lock (Face ID / Touch ID with device-passcode fallback) — see AppLock.
+    var appLockEnabled = false
+    var appLockGraceMinutes = 1     // minutes backgrounded before the lock re-arms
+
+    /// Grace periods offered in Settings, in minutes; anything else falls back to 1.
+    static let appLockGraceOptions = [0, 1, 5, 15]
 
     init() {}
 
@@ -1228,6 +1234,9 @@ struct AppSettings: Codable, Equatable {
         remindersSync = (try? c.decode(Bool.self, forKey: .remindersSync)) ?? false
         let ringCount = (try? c.decode(Int.self, forKey: .visibleRingCount)) ?? 4
         visibleRingCount = min(4, max(3, ringCount))
+        appLockEnabled = (try? c.decode(Bool.self, forKey: .appLockEnabled)) ?? false
+        let grace = (try? c.decode(Int.self, forKey: .appLockGraceMinutes)) ?? 1
+        appLockGraceMinutes = AppSettings.appLockGraceOptions.contains(grace) ? grace : 1
     }
 }
 

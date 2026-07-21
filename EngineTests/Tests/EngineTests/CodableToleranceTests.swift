@@ -180,6 +180,7 @@ final class CodableToleranceTests: XCTestCase {
         s.hkRead = HKReadFlags(weight: false, steps: false, energy: false, workouts: false, sleep: true)
         s.hkWrite = HKWriteFlags(calories: false, protein: false)
         s.calendarSync = true; s.remindersSync = true; s.visibleRingCount = 3
+        s.appLockEnabled = true; s.appLockGraceMinutes = 15
         try roundTrip(s)
 
         var t = Targets()
@@ -517,6 +518,17 @@ final class CodableToleranceTests: XCTestCase {
     func testVisibleRingCountIsClampedOnDecode() throws {
         XCTAssertEqual(try decode(AppSettings.self, #"{"visibleRingCount":99}"#).visibleRingCount, 4)
         XCTAssertEqual(try decode(AppSettings.self, #"{"visibleRingCount":0}"#).visibleRingCount, 3)
+    }
+
+    func testAppLockDefaultsAreSafeAndGraceIsValidated() throws {
+        // A pre-app-lock settings blob must come back unlocked, never locked-by-accident.
+        let old = try decode(AppSettings.self, #"{"provider":"openai"}"#)
+        XCTAssertFalse(old.appLockEnabled)
+        XCTAssertEqual(old.appLockGraceMinutes, 1)
+        XCTAssertEqual(try decode(AppSettings.self, #"{"appLockGraceMinutes":5}"#).appLockGraceMinutes, 5)
+        XCTAssertEqual(try decode(AppSettings.self, #"{"appLockGraceMinutes":0}"#).appLockGraceMinutes, 0)
+        XCTAssertEqual(try decode(AppSettings.self, #"{"appLockGraceMinutes":999}"#).appLockGraceMinutes, 1)
+        XCTAssertEqual(try decode(AppSettings.self, #"{"appLockGraceMinutes":-4}"#).appLockGraceMinutes, 1)
     }
 
     func testModulePrefsOrderDropsUnknownKeysAndAppendsNewOnes() throws {

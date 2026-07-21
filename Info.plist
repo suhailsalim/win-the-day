@@ -22,6 +22,8 @@
 	<string>Win the Day creates reminders for your sessions, prep and upcoming events.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Win the Day imports birthdays and anniversaries from your contacts so it can help you plan ahead.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Win the Day uses Face ID to unlock the app so your health notes, labs, prayer records and photos stay private.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIFileSharingEnabled</key>
