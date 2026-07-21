@@ -7,6 +7,7 @@ private let accentD = Color(red: 0.78, green: 0.52, blue: 0.18)
 private let sage = Color(red: 0.24, green: 0.66, blue: 0.46)
 private let ink = Color(red: 0.11, green: 0.11, blue: 0.12)
 private let cream = Color(red: 0.96, green: 0.92, blue: 0.86)
+private let coral = Color(red: 0.85, green: 0.42, blue: 0.29)
 
 struct SnapshotEntry: TimelineEntry {
     let date: Date
@@ -264,6 +265,125 @@ struct UpcomingEventWidget: Widget {
         }
         .configurationDisplayName("Upcoming event")
         .description("Your next birthday, anniversary or trip.")
+        .supportedFamilies([.systemSmall])
+    }
+}
+
+// MARK: - Rings (shared by the ring-strip + single-ring widgets)
+
+/// Local hex → Color. The app's `Color(hex:)` lives in the app target; the widget stays independent.
+private func ringHexColor(_ hex: UInt) -> Color {
+    Color(.sRGB,
+          red: Double((hex >> 16) & 0xff) / 255,
+          green: Double((hex >> 8) & 0xff) / 255,
+          blue: Double(hex & 0xff) / 255,
+          opacity: 1)
+}
+
+/// The arc color: the user's custom color when set, else the score band (`colorHex == 0` means
+/// "derive from the band", not black) — same bands the app's Today ring row uses.
+private func ringColor(_ r: SnapshotRing) -> Color {
+    if r.colorHex != 0 { return ringHexColor(r.colorHex) }
+    let frac = Double(r.pct) / 100
+    return frac < 0.34 ? coral : (frac < 0.67 ? accentD : sage)
+}
+
+/// One ring straight from the snapshot. `SnapshotRing` carries no `available` flag, so a "—"
+/// (or empty) display is the app's "no data yet" marker — grey track, no colored arc.
+private struct SnapshotRingView: View {
+    let ring: SnapshotRing
+    var size: CGFloat = 58
+    var lineWidth: CGFloat = 6
+
+    private var available: Bool { !ring.display.isEmpty && ring.display != "\u{2014}" }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                Circle().stroke(Color(white: 0.5).opacity(0.18), lineWidth: lineWidth)
+                if available {
+                    Circle().trim(from: 0, to: max(0.01, min(1, Double(ring.pct) / 100)))
+                        .stroke(ringColor(ring), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+                Text(available ? ring.display : "\u{2014}")
+                    .font(.system(size: size * 0.3, weight: .bold))
+                    .foregroundStyle(available ? ink : Color.secondary)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .padding(.horizontal, lineWidth + 2)
+            }
+            .frame(width: size, height: size)
+            Text(ring.title)
+                .font(.system(size: min(11, size * 0.17))).foregroundStyle(.secondary)
+                .lineLimit(1).minimumScaleFactor(0.6)
+        }
+    }
+}
+
+/// Shown when the snapshot has no rings — an old snapshot decodes `rings` as `[]`, and a fresh
+/// install has never published one. Never render 0% arcs for that.
+private struct RingsPlaceholderView: View {
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "circle.dashed").font(.system(size: 20)).foregroundStyle(accent)
+            Text("Open Win the Day to set up rings")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+}
+
+// MARK: - 4×2 Ring strip (medium)
+
+struct RingStripWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "RingStripWidget", provider: SnapshotProvider()) { entry in
+            let rings = entry.snap.rings
+            VStack(spacing: 8) {
+                if rings.isEmpty {
+                    RingsPlaceholderView()
+                } else {
+                    HStack(spacing: 4) {
+                        // The app already caps the row at the user's ring count (3 or 4); prefix
+                        // again so an oversized snapshot can never overflow the medium family.
+                        ForEach(Array(rings.prefix(4).enumerated()), id: \.offset) { _, ring in
+                            SnapshotRingView(ring: ring).frame(maxWidth: .infinity)
+                        }
+                    }
+                    if !entry.snap.topTip.isEmpty {
+                        Text(entry.snap.topTip)
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .lineLimit(2).multilineTextAlignment(.center)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .containerBackground(for: .widget) { widgetBackground() }
+        }
+        .configurationDisplayName("Rings")
+        .description("Your ring row and today\u{2019}s tip.")
+        .supportedFamilies([.systemMedium])
+    }
+}
+
+// MARK: - 1×1 Single ring
+
+struct SingleRingWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "SingleRingWidget", provider: SnapshotProvider()) { entry in
+            VStack {
+                // `rings.first` is the user's own #1 ring — the snapshot preserves their order.
+                if let ring = entry.snap.rings.first {
+                    SnapshotRingView(ring: ring, size: 92, lineWidth: 9)
+                } else {
+                    RingsPlaceholderView()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .containerBackground(for: .widget) { widgetBackground() }
+        }
+        .configurationDisplayName("Ring")
+        .description("Your first ring at a glance.")
         .supportedFamilies([.systemSmall])
     }
 }

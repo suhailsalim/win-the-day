@@ -7,6 +7,8 @@ struct PrayerWidgetBundle: WidgetBundle {
         NextPrayerWidget()
         NonNegotiablesWidget()
         SummaryWidget()
+        RingStripWidget()
+        SingleRingWidget()
         FastingWidget()
         WeekProgressWidget()
         ReadinessWidget()

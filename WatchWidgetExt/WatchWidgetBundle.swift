@@ -5,6 +5,7 @@ import SwiftUI
 struct WatchWidgetBundle: WidgetBundle {
     var body: some Widget {
         WatchScoreComplication()
+        WatchRingComplication()
         WatchPrayerComplication()
         WatchWeekComplication()
         WatchFastingComplication()

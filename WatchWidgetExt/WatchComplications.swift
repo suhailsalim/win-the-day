@@ -44,6 +44,36 @@ struct WatchScoreComplication: Widget {
     }
 }
 
+// Top ring — circular & corner. The watch App Group gets the same ring row the phone publishes,
+// so this tracks whatever the user put first on Today; it falls back to readiness when a snapshot
+// predates rings (old payloads decode `rings` as `[]`).
+struct WatchRingComplication: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "WatchRingComplication", provider: WatchProvider()) { entry in
+            let ring = entry.snap.rings.first
+            // `SnapshotRing` has no `available` flag — "—" is the app's no-data marker.
+            let hasData = ring.map { !$0.display.isEmpty && $0.display != "\u{2014}" } ?? false
+            let pct = hasData ? Double(ring?.pct ?? 0) : Double(max(0, entry.snap.readiness))
+            Gauge(value: pct, in: 0...100) {
+                Image(systemName: "circle.dashed")
+            } currentValueLabel: {
+                if let r = ring, hasData {
+                    Text(r.display).minimumScaleFactor(0.6)
+                } else if entry.snap.readiness > 0 {
+                    Text("\(entry.snap.readiness)")
+                } else {
+                    Text("\u{2014}")
+                }
+            }
+            .gaugeStyle(.accessoryCircularCapacity)
+            .containerBackground(.clear, for: .widget)
+        }
+        .configurationDisplayName("Top ring")
+        .description("Your first ring from Today.")
+        .supportedFamilies([.accessoryCircular, .accessoryCorner])
+    }
+}
+
 // Next prayer — inline
 struct WatchPrayerComplication: Widget {
     var body: some WidgetConfiguration {
