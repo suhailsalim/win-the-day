@@ -31,9 +31,6 @@ final class PrayerManager: NSObject, ObservableObject {
     @Published var locationAuthorized = false
     @Published var statusNote: String = ""
 
-    private let ramadanNotePrefix = "ramadan-"
-    private let suhoorLeadMinutes = 30   // warn this long before Fajr
-
     static let madhabs = ["hanafi", "shafi", "maliki", "hanbali"]
 
     /// Asr shadow factor: Hanafi = 2, everyone else (incl. Shia/Jafari) = 1.
@@ -111,14 +108,28 @@ final class PrayerManager: NSObject, ObservableObject {
     func setMethod(_ m: CalcMethod) { method = m; persist(); refreshFromCache() }
     func setBranch(_ b: String) { branch = b; persist(); refreshFromCache() }
     func setMadhab(_ m: String) { madhab = m; persist(); refreshFromCache() }
+    /// Ramadan mode is *derived* — `RamadanManager` auto-detects the month and mirrors it here so the
+    /// widget snapshot and the fasting card stay in step. The `ramadan-` notification prefix belongs
+    /// entirely to that manager (AGENTS.md convention 6): two owners clearing the same prefix meant
+    /// whichever ran last silently deleted the other's requests.
     func setRamadan(_ on: Bool) {
         ramadanMode = on; persist()
-        if on { refreshFromCache() } else { clearRamadanNotifications() }
+        refreshFromCache()
     }
 
     /// Suhoor ends at Fajr; iftar is at Maghrib (today's computed times).
     var suhoorEnd: Date? { today?[.fajr] }
     var iftar: Date? { today?[.maghrib] }
+
+    /// Computed prayer times for any date at the cached location — `nil` until a location is known.
+    /// Ramadan mode schedules against this so day N's suhoor is always built from day N's own Fajr.
+    func times(for date: Date) -> PrayerTimes? {
+        guard let coordinate else { return nil }
+        let m = activeMethod
+        return PrayerTimes.calculate(date: date, latitude: coordinate.latitude, longitude: coordinate.longitude,
+                                     timeZone: .current, fajrAngle: m.fajrAngle, ishaAngle: m.ishaAngle,
+                                     asrFactor: asrFactor)
+    }
 
     private func refreshFromCache() {
         if let coordinate { recompute(for: coordinate) }
@@ -145,7 +156,6 @@ final class PrayerManager: NSObject, ObservableObject {
                                          timeZone: tz, fajrAngle: m.fajrAngle, ishaAngle: m.ishaAngle,
                                          asrFactor: factor)[.fajr]
         if enabled { scheduleNotifications(coord: coord, asrFactor: factor, tz: tz) }
-        if ramadanMode { scheduleRamadanNotifications(coord: coord, asrFactor: factor, tz: tz) }
         maybeStartLiveActivity()
         publishSnapshot()
     }
@@ -199,59 +209,6 @@ final class PrayerManager: NSObject, ObservableObject {
     private func clearNotifications() {
         let center = UNUserNotificationCenter.current()
         let prefix = prayerNotePrefix
-        center.getPendingNotificationRequests { reqs in
-            let ours = reqs.filter { $0.identifier.hasPrefix(prefix) }.map { $0.identifier }
-            center.removePendingNotificationRequests(withIdentifiers: ours)
-        }
-    }
-
-    /// Ramadan: schedule a suhoor warning (before Fajr) and an iftar alert (at Maghrib) for the next 5 days.
-    private func scheduleRamadanNotifications(coord: CLLocationCoordinate2D, asrFactor: Double, tz: TimeZone) {
-        let center = UNUserNotificationCenter.current()
-        let prefix = ramadanNotePrefix
-        let method = activeMethod
-        let lead = suhoorLeadMinutes
-        center.getPendingNotificationRequests { reqs in
-            let ours = reqs.filter { $0.identifier.hasPrefix(prefix) }.map { $0.identifier }
-            center.removePendingNotificationRequests(withIdentifiers: ours)
-
-            var cal = Calendar(identifier: .gregorian)
-            cal.timeZone = tz
-            let now = Date()
-            for offset in 0..<5 {
-                guard let day = cal.date(byAdding: .day, value: offset, to: now) else { continue }
-                let pt = PrayerTimes.calculate(date: day, latitude: coord.latitude, longitude: coord.longitude,
-                                               timeZone: tz, fajrAngle: method.fajrAngle,
-                                               ishaAngle: method.ishaAngle, asrFactor: asrFactor)
-                let stamp = "\(cal.component(.year, from: day))-\(cal.component(.month, from: day))-\(cal.component(.day, from: day))"
-
-                if let fajr = pt[.fajr],
-                   let suhoor = cal.date(byAdding: .minute, value: -lead, to: fajr), suhoor > now {
-                    Self.addRamadan(center, cal, suhoor, id: "\(prefix)suhoor-\(stamp)",
-                                    title: "Suhoor ending soon 🌙",
-                                    body: "About \(lead) min to Fajr — finish suhoor and hydrate.")
-                }
-                if let maghrib = pt[.maghrib], maghrib > now {
-                    Self.addRamadan(center, cal, maghrib, id: "\(prefix)iftar-\(stamp)",
-                                    title: "Iftar time 🤲",
-                                    body: "Maghrib is in — time to break your fast. Ramadan Mubarak.")
-                }
-            }
-        }
-    }
-
-    private nonisolated static func addRamadan(_ center: UNUserNotificationCenter, _ cal: Calendar, _ date: Date,
-                                               id: String, title: String, body: String) {
-        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-        let content = UNMutableNotificationContent()
-        content.title = title; content.body = body; content.sound = .default
-        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-        center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
-    }
-
-    private func clearRamadanNotifications() {
-        let center = UNUserNotificationCenter.current()
-        let prefix = ramadanNotePrefix
         center.getPendingNotificationRequests { reqs in
             let ours = reqs.filter { $0.identifier.hasPrefix(prefix) }.map { $0.identifier }
             center.removePendingNotificationRequests(withIdentifiers: ours)

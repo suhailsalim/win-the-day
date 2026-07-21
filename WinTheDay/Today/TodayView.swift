@@ -224,6 +224,7 @@ struct TodayView: View {
             case "weather": weatherModule
             case "prayer": prayerCard
             case "quran": QuranModuleView()
+            case "ramadan": RamadanModuleView()
             case "fasting": fastingModule
             case "sleep": sleepModule
             case "health": healthCard

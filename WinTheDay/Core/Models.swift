@@ -114,6 +114,10 @@ struct Entry: Codable, Equatable, Identifiable {
     var quranPages = 0               // Qur'an pages read this day (khatmah position is derived from these)
     var regimenTaken: [String: [String]] = [:]     // regimen id → slot keys taken that day
     var regimenTakenAt: [String: Double] = [:]     // "regimenID#slot" → epoch it was marked (like prayers)
+    // Ramadan mode (Managers/RamadanManager.swift): was this day actually fasted? Stamped onto the
+    // day rather than re-derived later, so a past day scores the way it was lived — and so the
+    // Eating timing sub-score never has to guess "Ramadan" from wall-clock meal times.
+    var ramadanFasting = false
 
     var id: String { date }
 
@@ -158,6 +162,7 @@ struct Entry: Codable, Equatable, Identifiable {
         quranPages = (try? c.decode(Int.self, forKey: .quranPages)) ?? 0
         regimenTaken = (try? c.decode([String: [String]].self, forKey: .regimenTaken)) ?? [:]
         regimenTakenAt = (try? c.decode([String: Double].self, forKey: .regimenTakenAt)) ?? [:]
+        ramadanFasting = (try? c.decode(Bool.self, forKey: .ramadanFasting)) ?? false
         // Migrate legacy non-negotiables into the new manual-habit state.
         if habitState.isEmpty {
             if nn.moved { habitState["moved"] = true }
@@ -1519,11 +1524,12 @@ struct ModulePrefs: Codable, Equatable {
     var sleep = true
     var weather = true
     var quran = false                // Qur'an reading tracker — opt-in, like fasting
+    var ramadan = true               // on by default: the card hides itself outside Ramadan anyway
     var regimen = true
     var order: [String] = ModulePrefs.defaultOrder
 
     /// Canonical order; "rings"/"habits"/"score" are core (always shown, but movable).
-    static let defaultOrder = ["rings", "coach", "weather", "prayer", "quran", "fasting", "sleep", "health", "meals", "hydration",
+    static let defaultOrder = ["rings", "coach", "weather", "prayer", "quran", "ramadan", "fasting", "sleep", "health", "meals", "hydration",
                                "regimen",
                                "quickLog", "habits", "score", "workStudy", "training", "photos"]
     static let coreKeys: Set<String> = ["rings", "habits", "score"]
@@ -1539,6 +1545,7 @@ struct ModulePrefs: Codable, Equatable {
         sleep = (try? c.decode(Bool.self, forKey: .sleep)) ?? true
         weather = (try? c.decode(Bool.self, forKey: .weather)) ?? true
         quran = (try? c.decode(Bool.self, forKey: .quran)) ?? false
+        ramadan = (try? c.decode(Bool.self, forKey: .ramadan)) ?? true
         regimen = (try? c.decode(Bool.self, forKey: .regimen)) ?? true
         let saved = (try? c.decode([String].self, forKey: .order)) ?? ModulePrefs.defaultOrder
         // Keep known keys in saved order, then append any new ones not yet present.
@@ -1556,6 +1563,7 @@ struct ModulePrefs: Codable, Equatable {
         case "weather": return "Weather"
         case "prayer": return "Prayer times"
         case "quran": return "Qur'an reading"
+        case "ramadan": return "Ramadan"
         case "fasting": return "Fasting"
         case "sleep": return "Sleep & readiness"
         case "health": return "Apple Health card"
@@ -1579,6 +1587,7 @@ struct ModulePrefs: Codable, Equatable {
         case "weather": return weather
         case "prayer": return prayer
         case "quran": return quran
+        case "ramadan": return ramadan
         case "fasting": return fasting
         case "sleep": return sleep
         case "health": return health
@@ -1599,6 +1608,7 @@ struct ModulePrefs: Codable, Equatable {
         case "weather": weather = v
         case "prayer": prayer = v
         case "quran": quran = v
+        case "ramadan": ramadan = v
         case "fasting": fasting = v
         case "sleep": sleep = v
         case "health": health = v
