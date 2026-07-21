@@ -9,6 +9,7 @@ struct SettingsView: View {
     @EnvironmentObject var ramadan: RamadanManager
     @EnvironmentObject var calendar: CalendarManager
     @EnvironmentObject var lock: AppLock
+    @EnvironmentObject var theme: ThemeController
     @Binding var confirmReset: Bool
 
     @State private var providersOpen = false
@@ -88,6 +89,9 @@ struct SettingsView: View {
 
             SectionHeader(text: "Pillar names")
             pillarNamesCard
+
+            SectionHeader(text: "Appearance")
+            appearanceCard
 
             SectionHeader(text: "Module colors")
             moduleColorsCard
@@ -521,6 +525,56 @@ struct SettingsView: View {
                 .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
         }
         .padding(.horizontal, 16).padding(.vertical, 11)
+    }
+
+    // MARK: - Appearance (see UI/Theme.swift)
+
+    @ViewBuilder private var appearanceCard: some View {
+        VStack(spacing: 0) {
+            Menu {
+                ForEach(ThemeMode.allCases, id: \.self) { m in
+                    Button(m.label) { store.updateSettings { $0.themeMode = m.rawValue } }
+                }
+            } label: {
+                pickerLabel("Theme", store.settings.theme.label)
+            }
+            // Only meaningful once something can actually be dark.
+            if store.settings.theme != .light {
+                Hairline()
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Dark style").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                    HStack(spacing: 0) {
+                        ForEach(DarkStyle.allCases, id: \.self) { s in
+                            let on = store.settings.dark == s
+                            Button { store.updateSettings { $0.darkStyle = s.rawValue } } label: {
+                                Text(s.label).font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(on ? .white : Theme.ink)
+                                    .frame(maxWidth: .infinity).padding(.vertical, 9)
+                                    .background(on ? Theme.accentDark : Color.clear)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .background(Theme.surfaceOverlay).clipShape(Capsule())
+                    .overlay(Capsule().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
+                    Text(store.settings.dark.note)
+                        .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 13)
+            }
+            Hairline()
+            HStack(spacing: 8) {
+                Image(systemName: theme.glassOn ? "circle.hexagongrid.fill" : "square.fill")
+                    .font(.system(size: 13)).foregroundStyle(Theme.accentDark)
+                Text(theme.glassOn
+                     ? "Liquid glass is on. Turn on Reduce Transparency in iOS Settings → Accessibility → Display & Text Size to switch to solid surfaces."
+                     : "Solid surfaces, because Reduce Transparency is on in iOS Accessibility settings.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+        }
+        .glassList()
     }
 
     // MARK: - Smart reminders (rule-based nudges — ReminderEngine)

@@ -13,6 +13,7 @@ struct WinTheDayApp: App {
     @StateObject private var weather = WeatherManager()
     @StateObject private var lock = AppLock()
     @StateObject private var windDownRouter = WindDownRouter()   // routes a tapped `winddown-` nudge
+    @StateObject private var theme = ThemeController()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -29,14 +30,29 @@ struct WinTheDayApp: App {
                 .environmentObject(weather)
                 .environmentObject(lock)
                 .environmentObject(windDownRouter)
+                .environmentObject(theme)
                 .tint(Theme.accentDark)
-                .preferredColorScheme(.light)
+                // `.system` resolves to nil, which hands the choice back to iOS.
+                .preferredColorScheme(theme.mode.colorScheme)
+                // `Theme`'s tokens are computed properties, so SwiftUI has no way to know that views
+                // it considers unchanged now resolve to different colours. Re-key on a palette
+                // change to force one clean re-render; this fires only when the user flips a
+                // setting or toggles Reduce Transparency, never during normal use.
+                .id(theme.revision)
                 // App lock: privacy cover + Face ID gate, drawn above every tab.
                 .overlay {
                     if lock.shielded { LockScreenView().environmentObject(lock) }
                 }
                 .animation(.easeOut(duration: 0.15), value: lock.shielded)
                 .task { lock.start(enabled: store.settings.appLockEnabled) }
+                .task {
+                    theme.start()
+                    theme.apply(mode: store.settings.theme, darkStyle: store.settings.dark)
+                }
+                // Settings edits and restored backups both land here.
+                .onChange(of: store.settings) { _, s in
+                    theme.apply(mode: s.theme, darkStyle: s.dark)
+                }
                 // Cold launch: `.onChange(of: scenePhase)` isn't guaranteed to fire for the very
                 // first `.active`, and a Siri/widget write made before launch must not be lost.
                 .task { store.reconcileIntentWrites(prayerTimes: prayer.today, nextFajr: prayer.nextFajr) }
