@@ -19,7 +19,8 @@ let package = Package(
             sources: ["Core/Models.swift", "Engines/ScoreEngine.swift",
                       "Engines/EatingScorer.swift", "Engines/PrayerClassifier.swift",
                       "Engines/RingEngine.swift", "Engines/ReadinessScorer.swift",
-                      "Engines/SleepPlanner.swift", "Engines/PrayerTimes.swift"]),
+                      "Engines/SleepPlanner.swift", "Engines/PrayerTimes.swift",
+                      "Engines/Milestones.swift"]),
         .testTarget(name: "EngineTests", dependencies: ["AppCore"],
                     path: "Tests/EngineTests")
     ]

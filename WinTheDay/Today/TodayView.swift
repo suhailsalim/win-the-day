@@ -67,6 +67,11 @@ struct TodayView: View {
                 Task { await store.computeReadiness(for: store.date, health: health) }
             }
         }
+        // Milestones: one calm sheet per earned record (or one summary for a historical batch).
+        .sheet(item: Binding(get: { store.justEarned },
+                             set: { if $0 == nil { store.dismissMilestone() } })) { event in
+            MilestoneCelebrationSheet(event: event)
+        }
         .fullScreenCover(isPresented: $showFocus) { FocusScreenView() }
         .task { await store.refreshSuggestion() }
         .task { prayer.start() }

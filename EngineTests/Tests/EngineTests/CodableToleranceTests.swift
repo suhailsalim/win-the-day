@@ -137,6 +137,7 @@ final class CodableToleranceTests: XCTestCase {
         d.healthNotes = [note]
         d.rings = [RingDef(source: .custom, metric: .hydrationPct, title: "Water", goal: 3000,
                            colorHex: 0x33AACC, enabled: false, order: 7)]
+        d.earnedMilestones = [EarnedMilestone(id: "days-100", earnedEpoch: 1_772_000_000)]
         return d
     }
 
@@ -229,6 +230,7 @@ final class CodableToleranceTests: XCTestCase {
         XCTAssertEqual(back.occasions, original.occasions)
         XCTAssertEqual(back.healthNotes, original.healthNotes)
         XCTAssertEqual(back.rings, original.rings)
+        XCTAssertEqual(back.earnedMilestones, original.earnedMilestones)
     }
 
     // MARK: - Types reachable from AppData as whole arrays
@@ -376,6 +378,8 @@ final class CodableToleranceTests: XCTestCase {
         XCTAssertTrue(entry.habitState.isEmpty)
 
         XCTAssertTrue(try decodeEmpty(AppData.self).entries.isEmpty)
+        XCTAssertTrue(try decodeEmpty(AppData.self).earnedMilestones.isEmpty)
+        XCTAssertEqual(try decodeEmpty(EarnedMilestone.self).earnedEpoch, 0)
         XCTAssertEqual(try decodeEmpty(AppSettings.self), AppSettings())
         XCTAssertEqual(try decodeEmpty(Targets.self), Targets())
         XCTAssertEqual(try decodeEmpty(ModulePrefs.self), ModulePrefs())
