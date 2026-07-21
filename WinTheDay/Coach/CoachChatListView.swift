@@ -70,7 +70,7 @@ struct CoachChatListView: View {
                 pushActive = true
             } label: {
                 Label("New chat", systemImage: "plus")
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .padding(.horizontal, 18).padding(.vertical, 10)
                     .background(Capsule().fill(Theme.accentDark))
             }.buttonStyle(.plain).padding(.top, 4)

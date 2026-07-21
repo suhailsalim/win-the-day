@@ -87,7 +87,7 @@ struct SessionEditorView: View {
                             Image(systemName: k.symbol).font(.system(size: 15))
                             Text(k.label).font(.system(size: 10, weight: .semibold))
                         }
-                        .foregroundStyle(on ? .white : Theme.ink)
+                        .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                         .frame(width: 80).padding(.vertical, 10)
                         .background(RoundedRectangle(cornerRadius: 13).fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay)))
                     }.buttonStyle(.plain)

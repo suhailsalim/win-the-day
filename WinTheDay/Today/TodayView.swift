@@ -320,7 +320,7 @@ struct TodayView: View {
                         Image(systemName: bucket.icon).font(.system(size: 12)).foregroundStyle(Theme.accentDark)
                         Text(bucket.label).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.ink)
                         if store.isToday && store.mealNudge?.key == bucket.rawValue {
-                            Text("now").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                            Text("now").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.onAccent)
                                 .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(Theme.accentDark))
                         }
                         Spacer()
@@ -500,7 +500,7 @@ struct TodayView: View {
                     Text(done ? "Check-in logged" : "How do you feel?")
                         .font(.system(size: 13, weight: .semibold))
                 }
-                .foregroundStyle(done ? .white : Theme.accentDark)
+                .foregroundStyle(done ? Theme.onAccent : Theme.accentDark)
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .background(
                     Capsule().fill(done ? Theme.accentDark : Theme.accentDark.opacity(0.12))
@@ -636,7 +636,7 @@ struct TodayView: View {
                         } label: {
                             Text(fasting.isFasting ? "End fast" : "Start fast")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(fasting.isFasting ? Theme.accentDark : .white)
+                                .foregroundStyle(fasting.isFasting ? Theme.accentDark : Theme.onAccent)
                                 .padding(.horizontal, 16).padding(.vertical, 9)
                                 .background(Capsule().fill(fasting.isFasting ? AnyShapeStyle(Theme.surfaceOverlay) : AnyShapeStyle(Theme.accentDark)))
                                 .overlay(Capsule().strokeBorder(Theme.accent.opacity(fasting.isFasting ? 0.4 : 0), lineWidth: 0.5))
@@ -978,7 +978,7 @@ struct TodayView: View {
                 Image(systemName: done ? "checkmark.circle.fill" : "target").font(.system(size: 10))
                 Text(focus).font(.system(size: 11, weight: .semibold)).lineLimit(1)
             }
-            .foregroundStyle(done ? .white : Theme.accentDark)
+            .foregroundStyle(done ? Theme.onAccent : Theme.accentDark)
             .padding(.horizontal, 9).padding(.vertical, 4)
             .background(Capsule().fill(done ? Theme.sage : Theme.accent.opacity(0.12)))
         }
@@ -991,7 +991,7 @@ struct TodayView: View {
                 Image(systemName: "moon.zzz.fill").font(.system(size: 10))
                 Text("Wind down").font(.system(size: 11, weight: .semibold))
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.onAccent)
             .padding(.horizontal, 9).padding(.vertical, 4)
             .background(Capsule().fill(Theme.accentDark))
         }
@@ -1012,7 +1012,7 @@ struct TodayView: View {
                     Text(DayStatus.label(shown) + (store.draft.status == "normal" && effective == "travel" ? " (auto)" : ""))
                         .font(.system(size: 11, weight: .semibold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.onAccent)
                 .padding(.horizontal, 9).padding(.vertical, 4)
                 .background(Capsule().fill(Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8E7BFF)))
             } else {
@@ -1077,10 +1077,10 @@ struct TodayView: View {
                                     .lineLimit(1).minimumScaleFactor(0.75)
                                 Text(prayed ? band.label : timeStr(prayer.displayTime(name, on: date, from: times) ?? date))
                                     .font(.system(size: 12.5, weight: .semibold))
-                                    .foregroundStyle(prayed ? .white : (isNext ? Theme.accentDark : Theme.ink))
+                                    .foregroundStyle(prayed ? Theme.onAccent : (isNext ? Theme.accentDark : Theme.ink))
                                 Image(systemName: prayed ? "checkmark.circle.fill" : "circle")
                                     .font(.system(size: 13))
-                                    .foregroundStyle(prayed ? .white : Theme.quaternaryInk)
+                                    .foregroundStyle(prayed ? Theme.onAccent : Theme.quaternaryInk)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
@@ -1265,12 +1265,12 @@ struct TodayView: View {
         if qty > 0 {
             HStack(spacing: 8) {
                 Button { store.removeServing(item) } label: {
-                    Image(systemName: qty == 1 ? "trash" : "minus").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                    Image(systemName: qty == 1 ? "trash" : "minus").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.onAccent)
                 }.buttonStyle(.plain)
                 Text(qty > 1 ? "\(item.name) ×\(qty)" : item.name)
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.onAccent)
                 Button { store.addServing(item) } label: {
-                    Image(systemName: "plus").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                    Image(systemName: "plus").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.onAccent)
                 }.buttonStyle(.plain)
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
@@ -1373,7 +1373,7 @@ struct TodayView: View {
                             .foregroundStyle(highlight ? Theme.accentDark : Theme.secondaryInk)
                         if highlight {
                             Text("now").font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Theme.onAccent)
                                 .padding(.horizontal, 6).padding(.vertical, 1)
                                 .background(Capsule().fill(Theme.accentDark))
                         }
@@ -1392,7 +1392,7 @@ struct TodayView: View {
                 Task { await store.estimate() }
             } label: {
                 Text(estimateLabel)
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -1715,7 +1715,7 @@ struct TodayView: View {
                         let mins = studyTimer.stop()
                         store.logStudySession(subject: studyTimer.subject, minutes: mins)
                     }
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8E7BFF)))
                 }

@@ -192,7 +192,7 @@ struct MilestoneCelebrationSheet: View {
                         dismiss()
                     } label: {
                         Text("Good")
-                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                             .frame(maxWidth: .infinity).padding(.vertical, 13)
                             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.accentDark))
                     }

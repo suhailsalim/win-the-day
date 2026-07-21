@@ -53,7 +53,7 @@ struct OnboardingView: View {
                 Button(isLast ? "Start winning days" : "Continue") {
                     if isLast { finish() } else { withAnimation { index = min(index + 1, steps.count - 1) } }
                 }
-                .font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+                .font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.onAccent)
                 .frame(maxWidth: .infinity).padding(.vertical, 15)
                 .background(RoundedRectangle(cornerRadius: 16)
                     .fill(LinearGradient(colors: [Theme.adaptive(light: 0x6470A6, darkGrey: 0x6E7AB8),
@@ -267,7 +267,7 @@ struct OnboardingView: View {
                 let on = selection.wrappedValue == key
                 Button { selection.wrappedValue = key } label: {
                     Text(options[key] ?? key).font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(on ? .white : Theme.ink)
+                        .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
                         .background(on ? Theme.accentDark : Color.clear)
                 }.buttonStyle(.plain)

@@ -67,6 +67,16 @@ enum Theme {
     /// Warning / over-target. Kept as one token so it can be lifted for dark in one place.
     static var coral: Color       { adaptive(light: 0xD86B4A, darkGrey: 0xF08A66) }
 
+    /// Foreground for content sitting **on top of** a filled `accent`/`accentDark`/`sage`/`coral`
+    /// surface — a button label, a selected segment, an icon-tile glyph.
+    ///
+    /// This is not decoration, it is the fix for a real trap. Those fills inverted for dark: in
+    /// light `accentDark` is a deep indigo and white-on-it reads fine, but in dark it resolves to a
+    /// pale lavender and white-on-it measures about 1.9:1 — effectively unreadable. So the
+    /// foreground has to invert with the fill, not stay white. Never use this on the page
+    /// background; that is what `ink` is for.
+    static var onAccent: Color    { adaptive(light: 0xFFFFFF, darkGrey: 0x14161C, darkBlack: 0x000000) }
+
     // Tip card — neutral glass, not warm.
     static var tipBG: Color     { adaptive(light: 0x3B4A7C, darkGrey: 0x9AA6DC).opacity(glassOff ? 0.16 : 0.07) }
     static var tipBorder: Color { adaptive(light: 0x3B4A7C, darkGrey: 0x9AA6DC).opacity(0.16) }

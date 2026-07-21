@@ -24,7 +24,7 @@ struct StudyManageView: View {
                 Button { store.updateTargets { $0.workMode = mode } } label: {
                     Text(mode == "study" ? "Study" : "Work")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(on ? .white : Theme.ink)
+                        .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                         .frame(maxWidth: .infinity).padding(.vertical, 11)
                         .background(on ? studyPurple : Color.clear)
                 }
@@ -90,7 +90,7 @@ struct StudyManageView: View {
                     Button { newCdKind = k } label: {
                         Text(k == "study" ? "Exam/study" : "Deadline/work")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(newCdKind == k ? .white : Theme.ink)
+                            .foregroundStyle(newCdKind == k ? Theme.onAccent : Theme.ink)
                             .frame(maxWidth: .infinity).padding(.vertical, 8)
                             .background(newCdKind == k ? studyPurple : Color.clear)
                     }.buttonStyle(.plain)
@@ -143,7 +143,7 @@ struct StudyManageView: View {
                     dismiss()
                 } label: {
                     Label("Start timer", systemImage: "play.fill")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
                         .background(RoundedRectangle(cornerRadius: 13).fill(studyPurple))
                 }.buttonStyle(.plain)

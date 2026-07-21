@@ -227,7 +227,7 @@ struct HealthView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 14.5, weight: .semibold))
-                .foregroundStyle(filled ? .white : Theme.accentDark)
+                .foregroundStyle(filled ? Theme.onAccent : Theme.accentDark)
                 .frame(maxWidth: .infinity).padding(.vertical, 11)
                 .background(
                     RoundedRectangle(cornerRadius: 13, style: .continuous)

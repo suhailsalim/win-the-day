@@ -233,7 +233,7 @@ struct FoodAddSheet: View {
             Text("Not in your library or the database yet.").font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
             Button { Task { searchingOnline = true; onlineResults = await store.searchFoodOnline(query); searchingOnline = false } } label: {
                 Label("Search Open Food Facts", systemImage: "globe").font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white).padding(.horizontal, 16).padding(.vertical, 9)
+                    .foregroundStyle(Theme.onAccent).padding(.horizontal, 16).padding(.vertical, 9)
                     .background(Capsule().fill(Theme.accentDark))
             }.buttonStyle(.plain)
         }.padding(14).frame(maxWidth: .infinity).glassList()
@@ -318,7 +318,7 @@ struct FoodAddSheet: View {
                 HStack(spacing: 6) {
                     if parsing { ProgressView().tint(.white) }
                     Text(parsing ? "Reading…" : "Add from description")
-                }.font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                }.font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 11)
                     .background(RoundedRectangle(cornerRadius: 13).fill(Theme.accentDark))
             }.buttonStyle(.plain).disabled(parsing || nlText.trimmingCharacters(in: .whitespaces).isEmpty)

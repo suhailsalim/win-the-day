@@ -252,7 +252,7 @@ struct KhatmahSetupView: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(on ? .white : Theme.ink)
+                .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                 .padding(.horizontal, 12).padding(.vertical, 7)
                 .background(Capsule().fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay))
                     .overlay(Capsule().strokeBorder(Theme.accent.opacity(on ? 0 : 0.35), lineWidth: 0.5)))

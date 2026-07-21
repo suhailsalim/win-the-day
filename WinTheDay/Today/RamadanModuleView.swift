@@ -129,7 +129,7 @@ struct RamadanModuleView: View {
             } label: {
                 Text(fastingToday ? "Not fasting today" : "Fasting today")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(fastingToday ? Theme.accentDark : .white)
+                    .foregroundStyle(fastingToday ? Theme.accentDark : Theme.onAccent)
                     .padding(.horizontal, 14).padding(.vertical, 8)
                     .background(Capsule().fill(fastingToday ? AnyShapeStyle(Theme.surfaceOverlay)
                                                             : AnyShapeStyle(Theme.accentDark)))

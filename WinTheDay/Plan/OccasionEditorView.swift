@@ -62,7 +62,7 @@ struct OccasionEditorView: View {
                             Image(systemName: t.symbol).font(.system(size: 15))
                             Text(t.label).font(.system(size: 10, weight: .semibold))
                         }
-                        .foregroundStyle(on ? .white : Theme.ink)
+                        .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                         .frame(width: 72).padding(.vertical, 10)
                         .background(RoundedRectangle(cornerRadius: 13).fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay)))
                     }.buttonStyle(.plain)
@@ -111,8 +111,8 @@ struct OccasionEditorView: View {
         } label: {
             HStack {
                 if store.occasionPlanLoading { ProgressView().scaleEffect(0.8) }
-                else { Image(systemName: "sparkles").foregroundStyle(.white) }
-                Text(store.occasionPlanLoading ? "Planning…" : "Plan it with AI").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                else { Image(systemName: "sparkles").foregroundStyle(Theme.onAccent) }
+                Text(store.occasionPlanLoading ? "Planning…" : "Plan it with AI").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.onAccent)
             }
             .frame(maxWidth: .infinity).padding(.vertical, 13)
             .background(RoundedRectangle(cornerRadius: 14).fill(Theme.accentDark))
@@ -219,7 +219,7 @@ struct OccasionEditorView: View {
             } label: {
                 HStack(spacing: 6) {
                     if store.occasionPlanLoading { ProgressView().scaleEffect(0.8).tint(.white) }
-                    Text(store.occasionPlanLoading ? "Revising…" : "Apply changes").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    Text(store.occasionPlanLoading ? "Revising…" : "Apply changes").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 11)
                 .background(RoundedRectangle(cornerRadius: 13).fill(Theme.accentDark))

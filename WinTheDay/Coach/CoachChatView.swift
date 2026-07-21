@@ -142,7 +142,7 @@ struct CoachChatView: View {
                             store.commitCoachWrite(w, times: prayer.today, nextFajr: prayer.nextFajr)
                         } label: {
                             Text("Confirm")
-                                .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(.white)
+                                .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.onAccent)
                                 .padding(.horizontal, 18).padding(.vertical, 8)
                                 .background(Capsule().fill(Theme.accentDark))
                         }
@@ -193,7 +193,7 @@ struct CoachChatView: View {
             if m.isUser { Spacer(minLength: 40) }
             Text(m.text)
                 .font(.system(size: 15))
-                .foregroundStyle(m.isUser ? .white : Theme.ink)
+                .foregroundStyle(m.isUser ? Theme.onAccent : Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(

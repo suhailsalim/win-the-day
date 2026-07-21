@@ -60,7 +60,7 @@ struct FocusScreenView: View {
                 ForEach(Self.presets, id: \.self) { m in
                     Button { durationMin = m } label: {
                         Text("\(m)m").font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(durationMin == m ? .white : Theme.ink)
+                            .foregroundStyle(durationMin == m ? Theme.onAccent : Theme.ink)
                             .frame(maxWidth: .infinity).padding(.vertical, 10)
                             .background(Capsule().fill(durationMin == m ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay)))
                     }.buttonStyle(.plain)
@@ -69,7 +69,7 @@ struct FocusScreenView: View {
 
             Button { start() } label: {
                 Label("Start focusing", systemImage: "play.fill")
-                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 14)
                     .background(RoundedRectangle(cornerRadius: 16).fill(Theme.accentDark))
             }.buttonStyle(.plain).disabled(taskName.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -129,7 +129,7 @@ struct FocusScreenView: View {
                 .frame(maxWidth: .infinity).padding(.vertical, 13)
                 .background(RoundedRectangle(cornerRadius: 14).fill(Theme.accent.opacity(0.18)))
                 Button("Done") { finish() }
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                     .background(RoundedRectangle(cornerRadius: 14).fill(Theme.accentDark))
             }

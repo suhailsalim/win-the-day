@@ -549,7 +549,7 @@ struct SettingsView: View {
                             let on = store.settings.dark == s
                             Button { store.updateSettings { $0.darkStyle = s.rawValue } } label: {
                                 Text(s.label).font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(on ? .white : Theme.ink)
+                                    .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                                     .frame(maxWidth: .infinity).padding(.vertical, 9)
                                     .background(on ? Theme.accentDark : Color.clear)
                             }
@@ -776,7 +776,7 @@ struct SettingsView: View {
                             let on = fasting.protocolName == p.id
                             Button { fasting.protocolName = p.id } label: {
                                 Text(p.label).font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(on ? .white : Theme.ink)
+                                    .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                                     .padding(.horizontal, 13).padding(.vertical, 8)
                                     .background(Capsule().fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay)))
                                     .overlay(Capsule().strokeBorder(Theme.surfaceStroke.opacity(on ? 0 : 1), lineWidth: 0.5))
@@ -1250,7 +1250,7 @@ struct RestoreConfirmSheet: View {
                         dismiss()
                     } label: {
                         Text("Replace my data")
-                            .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                            .font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.onAccent)
                             .frame(maxWidth: .infinity).padding(.vertical, 14)
                             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.coral))
                     }

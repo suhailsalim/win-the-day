@@ -254,7 +254,7 @@ struct RegimenDetailView: View {
         Button(action: action) {
             Text(text)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(on ? .white : Theme.secondaryInk)
+                .foregroundStyle(on ? Theme.onAccent : Theme.secondaryInk)
                 .padding(.horizontal, 13).padding(.vertical, 7)
                 .background(Capsule().fill(on ? Theme.accentDark : Theme.tertiaryInk.opacity(0.12)))
         }

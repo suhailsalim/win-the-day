@@ -42,10 +42,10 @@ struct PlanView: View {
             }
         } label: {
             HStack(spacing: 9) {
-                Image(systemName: "wand.and.stars").foregroundStyle(.white)
-                Text("Generate my week with AI").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                Image(systemName: "wand.and.stars").foregroundStyle(Theme.onAccent)
+                Text("Generate my week with AI").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.onAccent)
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(.white.opacity(0.7))
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.onAccent.opacity(0.7))
             }
             .padding(.horizontal, 16).padding(.vertical, 14)
             .background(RoundedRectangle(cornerRadius: 16).fill(LinearGradient(
@@ -117,9 +117,9 @@ struct PlanView: View {
                     ZStack {
                         Circle().fill(won ? Theme.sage : (logged ? Theme.accent.opacity(0.5) : Theme.tertiaryInk.opacity(0.12)))
                             .frame(width: 26, height: 26)
-                        if won { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white) }
+                        if won { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.onAccent) }
                         else if isPast && !logged { Image(systemName: "minus").font(.system(size: 10, weight: .bold)).foregroundStyle(Theme.tertiaryInk) }
-                        else { Text("\(cal.component(.day, from: day))").font(.system(size: 11, weight: .semibold)).foregroundStyle(logged ? .white : Theme.secondaryInk) }
+                        else { Text("\(cal.component(.day, from: day))").font(.system(size: 11, weight: .semibold)).foregroundStyle(logged ? Theme.onAccent : Theme.secondaryInk) }
                     }
                     .overlay(Circle().strokeBorder(Theme.accentDark, lineWidth: isToday ? 1.5 : 0).frame(width: 30, height: 30))
                 }

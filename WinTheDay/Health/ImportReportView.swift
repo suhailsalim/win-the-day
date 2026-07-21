@@ -112,7 +112,7 @@ struct ImportReportView: View {
                     if parsing { ProgressView().tint(.white) }
                     Text(parsing ? "Reading report…" : "Read & save to Health")
                 }
-                .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                 .frame(maxWidth: .infinity).padding(.vertical, 12)
                 .background(RoundedRectangle(cornerRadius: 13)
                     .fill(LinearGradient(colors: [Theme.accent, Theme.accentDark], startPoint: .top, endPoint: .bottom)))

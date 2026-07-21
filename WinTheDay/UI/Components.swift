@@ -212,7 +212,7 @@ struct IconTile: View {
             .overlay(
                 Image(systemName: symbol)
                     .font(.system(size: size * 0.5, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.onAccent)
             )
     }
 }

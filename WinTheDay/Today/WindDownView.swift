@@ -217,7 +217,7 @@ struct WindDownView: View {
                     let on = value.wrappedValue == idx
                     Button { value.wrappedValue = idx } label: {
                         Text(word).font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(on ? .white : Theme.ink)
+                            .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                             .lineLimit(1).minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity).padding(.vertical, 9)
                             .background(on ? Theme.accentDark : Color.clear)
@@ -284,7 +284,7 @@ struct WindDownView: View {
             Button {
                 if page < 2 { withAnimation { page += 1 } } else { finish() }
             } label: {
-                Text(page < 2 ? "Next" : "Done").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                Text(page < 2 ? "Next" : "Done").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                     .background(Capsule().fill(Theme.accentDark))
             }

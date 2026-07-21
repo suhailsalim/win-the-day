@@ -159,7 +159,7 @@ struct PhotoCompareView: View {
     }
 
     private func tag(_ s: String) -> some View {
-        Text(s).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+        Text(s).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.onAccent)
             .padding(.horizontal, 8).padding(.vertical, 4)
             .background(Capsule().fill(.black.opacity(0.4)))
     }

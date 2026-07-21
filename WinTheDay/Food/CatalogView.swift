@@ -192,7 +192,7 @@ struct ItemEditor: View {
                     if parsing { ProgressView().tint(.white) }
                     Text(parsing ? "Reading…" : "Autofill from text")
                 }
-                .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                 .frame(maxWidth: .infinity).padding(.vertical, 11)
                 .background(RoundedRectangle(cornerRadius: 13)
                     .fill(LinearGradient(colors: [Theme.accent, Theme.accentDark], startPoint: .top, endPoint: .bottom)))
@@ -260,7 +260,7 @@ struct ItemEditor: View {
                     Button {
                         if on { item.mealTags.removeAll { $0 == chip.key } } else { item.mealTags.append(chip.key) }
                     } label: {
-                        Text(chip.label).font(.system(size: 13, weight: .medium)).foregroundStyle(on ? .white : Theme.ink)
+                        Text(chip.label).font(.system(size: 13, weight: .medium)).foregroundStyle(on ? Theme.onAccent : Theme.ink)
                             .padding(.horizontal, 12).padding(.vertical, 7)
                             .background(Capsule().fill(on ? AnyShapeStyle(Theme.sage) : AnyShapeStyle(Theme.surfaceOverlay)))
                     }.buttonStyle(.plain)

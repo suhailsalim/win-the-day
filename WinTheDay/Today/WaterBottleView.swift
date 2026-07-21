@@ -37,10 +37,10 @@ struct WaterBottleView: View {
 
             VStack(spacing: 1) {
                 Text("\(currentMl)")
-                    .font(Theme.serif(26)).foregroundStyle(clamped > 0.55 ? .white : Theme.ink)
+                    .font(Theme.serif(26)).foregroundStyle(clamped > 0.55 ? Theme.onAccent : Theme.ink)
                 Text("/ \(targetMl) ml")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(clamped > 0.6 ? Color.white.opacity(0.85) : Theme.secondaryInk)
+                    .foregroundStyle(clamped > 0.6 ? Theme.onAccent.opacity(0.85) : Theme.secondaryInk)
             }
         }
         .frame(width: 92, height: 150)

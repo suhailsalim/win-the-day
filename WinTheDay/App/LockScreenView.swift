@@ -23,7 +23,7 @@ struct LockScreenView: View {
                     } else {
                         Button { lock.unlock() } label: {
                             Label("Unlock with \(AppLock.biometryLabel)", systemImage: "faceid")
-                                .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                                .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.onAccent)
                                 .padding(.horizontal, 18).padding(.vertical, 10)
                                 .background(Capsule().fill(Theme.accentDark))
                         }

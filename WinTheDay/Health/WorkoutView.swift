@@ -71,7 +71,7 @@ struct WorkoutView: View {
                         Image(systemName: k.symbol).font(.system(size: 15))
                         Text(k.label).font(.system(size: 11, weight: .semibold))
                     }
-                    .foregroundStyle(on ? .white : Theme.ink)
+                    .foregroundStyle(on ? Theme.onAccent : Theme.ink)
                     .frame(maxWidth: .infinity).padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 13).fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay)))
                     .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Theme.surfaceStroke.opacity(on ? 0 : 1), lineWidth: 0.5))
