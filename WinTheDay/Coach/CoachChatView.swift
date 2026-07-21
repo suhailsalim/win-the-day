@@ -2,8 +2,12 @@ import SwiftUI
 
 struct CoachChatView: View {
     @EnvironmentObject var store: AppStore
+    /// Supplies prayer times so a confirmed `togglePrayer` gets the same on-time band the Today
+    /// toggle records instead of an untimed mark.
+    @EnvironmentObject var prayer: PrayerManager
     @Environment(\.dismiss) private var dismiss
     @State private var input = ""
+    @State private var showWriteLog = false
     @FocusState private var inputFocused: Bool
     /// True when pushed from `CoachChatListView` — leaves the automatic back button in place
     /// instead of a "Done" button, and shows the thread title.
@@ -34,6 +38,14 @@ struct CoachChatView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    if !store.coachWriteLog.isEmpty {
+                        Button { showWriteLog = true } label: {
+                            Image(systemName: "arrow.uturn.backward.circle").foregroundStyle(Theme.accentDark)
+                        }
+                        .accessibilityLabel("Coach changes")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     if !store.chatMessages.isEmpty {
                         Button { store.clearChat() } label: {
                             Image(systemName: "trash").foregroundStyle(Theme.tertiaryInk)
@@ -41,6 +53,7 @@ struct CoachChatView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showWriteLog) { CoachWriteLogView() }
         }
     }
 
@@ -99,7 +112,83 @@ struct CoachChatView: View {
         .padding(.top, 8)
     }
 
-    private func bubble(_ m: ChatMessage) -> some View {
+    @ViewBuilder private func bubble(_ m: ChatMessage) -> some View {
+        if let w = m.pendingWrite { writeCard(w) } else { textBubble(m) }
+    }
+
+    // MARK: - Staged write card
+    //
+    // Nothing has been written when this appears. Confirm is the ONLY thing that mutates data.
+
+    @ViewBuilder private func writeCard(_ w: PendingCoachWrite) -> some View {
+        GlassCard(padding: 14, cornerRadius: 18, tint: Theme.tipBG) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                    Text(w.isPending ? "Coach wants to change your log" : "Coach change")
+                        .font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                    Spacer(minLength: 0)
+                }
+                Text(w.summary.isEmpty ? "A change to your log" : w.summary)
+                    .font(.system(size: 14.5)).foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !w.isKnownKind {
+                    Text("This app version doesn\u{2019}t know how to apply that \u{2014} nothing was changed.")
+                        .font(.system(size: 12)).foregroundStyle(Theme.secondaryInk)
+                } else if w.isPending {
+                    HStack(spacing: 8) {
+                        Button {
+                            store.commitCoachWrite(w, times: prayer.today, nextFajr: prayer.nextFajr)
+                        } label: {
+                            Text("Confirm")
+                                .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(.white)
+                                .padding(.horizontal, 18).padding(.vertical, 8)
+                                .background(Capsule().fill(Theme.accentDark))
+                        }
+                        .buttonStyle(.plain)
+                        Button { store.rejectCoachWrite(w) } label: {
+                            Text("Dismiss")
+                                .font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Theme.secondaryInk)
+                                .padding(.horizontal, 16).padding(.vertical, 8)
+                                .background(Capsule().fill(Color.white.opacity(0.6)))
+                                .overlay(Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+                        }
+                        .buttonStyle(.plain)
+                        Spacer(minLength: 0)
+                    }
+                } else {
+                    HStack(spacing: 5) {
+                        Image(systemName: resolvedIcon(w.status))
+                            .font(.system(size: 11, weight: .bold)).foregroundStyle(resolvedTint(w.status))
+                        Text(resolvedLabel(w.status))
+                            .font(.system(size: 12, weight: .medium)).foregroundStyle(resolvedTint(w.status))
+                    }
+                }
+            }
+        }
+        .padding(.trailing, 24)
+    }
+
+    private func resolvedLabel(_ status: String) -> String {
+        switch status {
+        case "confirmed": return "Applied"
+        case "undone": return "Undone"
+        default: return "Dismissed"
+        }
+    }
+    private func resolvedIcon(_ status: String) -> String {
+        switch status {
+        case "confirmed": return "checkmark.circle.fill"
+        case "undone": return "arrow.uturn.backward.circle.fill"
+        default: return "xmark.circle.fill"
+        }
+    }
+    private func resolvedTint(_ status: String) -> Color {
+        status == "confirmed" ? Theme.sage : Theme.tertiaryInk
+    }
+
+    private func textBubble(_ m: ChatMessage) -> some View {
         HStack {
             if m.isUser { Spacer(minLength: 40) }
             Text(m.text)
@@ -160,5 +249,71 @@ struct CoachChatView: View {
         input = ""
         inputFocused = false
         Task { await store.sendChat(msg) }
+    }
+}
+
+/// The journal of coach changes the user confirmed, newest first, each one tap undoable.
+/// Capped at 20 records by `AppStore`, so this list never grows without bound.
+struct CoachWriteLogView: View {
+    @EnvironmentObject var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                WarmBackground().ignoresSafeArea()
+                ScrollView {
+                    VStack(spacing: 0) {
+                        if store.coachWriteLog.isEmpty {
+                            Text("No coach changes yet. Anything the coach proposes shows up here once you confirm it.")
+                                .font(.system(size: 14)).foregroundStyle(Theme.secondaryInk)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(16)
+                        } else {
+                            ForEach(Array(store.coachWriteLog.reversed())) { r in
+                                if r.id != store.coachWriteLog.last?.id { Hairline() }
+                                HStack(spacing: 10) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(r.summary.isEmpty ? r.kind : r.summary)
+                                            .font(.system(size: 14.5)).foregroundStyle(Theme.ink)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        Text(when(r.epoch))
+                                            .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                                    }
+                                    Spacer(minLength: 8)
+                                    Button { store.undoCoachWrite(r) } label: {
+                                        Text("Undo")
+                                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                                            .padding(.horizontal, 14).padding(.vertical, 7)
+                                            .background(Capsule().fill(Color.white.opacity(0.6)))
+                                            .overlay(Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.horizontal, 16).padding(.vertical, 12)
+                            }
+                        }
+                    }
+                    .glassList()
+                    .padding(.horizontal, 16).padding(.top, 12)
+                }
+            }
+            .navigationTitle("Coach changes")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }.foregroundStyle(Theme.accentDark)
+                }
+            }
+        }
+    }
+
+    private func when(_ epoch: Double) -> String {
+        guard epoch > 0 else { return "" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_GB")
+        f.dateFormat = "EEE d MMM, h:mm a"
+        return f.string(from: Date(timeIntervalSince1970: epoch))
     }
 }

@@ -2998,18 +2998,30 @@ final class AppStore: ObservableObject {
 
         // Send the last ~16 turns; the model pulls anything else it needs via tools.
         let history = Array(threads[i].messages.suffix(16))
+        let writesOn = settings.coachWritesEnabled
+        let writeNote = writesOn
+            ? " You can also propose changes to the log (logFood, setMealText, setMealTime, togglePrayer, removeFood). A proposal is NOT a change: the user must tap Confirm in the app, so never say you logged, set, marked or removed anything — say you've proposed it."
+            : ""
         let leanSystem = """
-        You are "Coach", a warm, sharp, concise personal coach living inside the user's daily tracker app "Win the Day". Answer in 1–4 short sentences unless asked for detail. Call the available tools to read the user's real data before answering anything about their day, week, meals, prayers, readiness or targets — never invent numbers. You can give meal ideas, training/recovery tips, study/focus advice and motivation. If asked something you can't know, say so briefly.
+        You are "Coach", a warm, sharp, concise personal coach living inside the user's daily tracker app "Win the Day". Answer in 1–4 short sentences unless asked for detail. Call the available tools to read the user's real data before answering anything about their day, week, meals, prayers, readiness or targets — never invent numbers. You can give meal ideas, training/recovery tips, study/focus advice and motivation. If asked something you can't know, say so briefly.\(writeNote)
         """
+        _ = drainStagedCoachWrites()   // never carry a stale proposal into a new turn
         do {
             let reply = try await estimator.chatWithTools(system: leanSystem, history: history,
-                                                           tools: CoachToolRegistry.all, store: self, settings: settings)
+                                                           tools: CoachToolRegistry.tools(writesEnabled: writesOn),
+                                                           store: self, settings: settings)
             let clean = reply.trimmingCharacters(in: .whitespacesAndNewlines)
             threads[i].messages.append(ChatMessage(role: "assistant",
                                                     text: clean.isEmpty ? "I didn\u{2019}t catch that — try rephrasing?" : clean))
         } catch {
             threads[i].messages.append(ChatMessage(role: "assistant",
                                                     text: "Couldn\u{2019}t reach the AI: \(error.localizedDescription)"))
+        }
+        // Staged proposals become their own messages, each rendered as a Confirm / Dismiss card.
+        for w in drainStagedCoachWrites() {
+            threads[i].messages.append(ChatMessage(role: "assistant",
+                                                   text: "Proposed: \(w.summary) — awaiting your confirmation.",
+                                                   pendingWrite: w))
         }
         threads[i].messages = Array(threads[i].messages.suffix(60))
         threads[i].updatedEpoch = Date().timeIntervalSince1970
@@ -3097,6 +3109,313 @@ final class AppStore: ObservableObject {
     func toolGetTargets() -> String {
         let prizeArrow = targets.prizeLowerIsBetter ? "≤" : "≥"
         return "Targets: \(Int(targets.calories)) kcal, \(Int(targets.protein))g protein, \(Int(targets.steps)) steps, \(fmtT(targets.studyHours))h study/focus. Priority metric \"\(targets.prizeName)\": \(fmtT(targets.prizeCurrent))\(targets.prizeUnit) \u{2192} \(prizeArrow)\(fmtT(targets.prizeTarget))\(targets.prizeUnit). Mode: \(targets.workMode == "work" ? "Work" : "Study")."
+    }
+
+    // MARK: - Coach write proposals (staged -> confirm -> journal -> undo)
+    //
+    // The safety design IS the feature. A write tool never mutates anything: it stages a
+    // `PendingCoachWrite` here, `sendChat` drains the staged list into chat messages, and only
+    // `commitCoachWrite` — driven by the user tapping Confirm — applies it, through the exact
+    // same AppStore methods the UI uses. Confirmed writes are journaled with the pre-state so a
+    // single tap reverses them.
+
+    private static let coachWriteLogKey = "coach_write_log_v1"
+    private static let coachWriteLogCap = 20
+    private static let coachStagedCap = 5   // proposals one assistant turn may raise
+
+    /// The exact tool-result string every write tool returns — the model must not claim success.
+    static let coachWriteAck = "Proposed. Awaiting user confirmation in the app — do not assume it was applied."
+
+    /// Writes proposed during the in-flight turn. Nothing here has touched user data.
+    private var stagedCoachWrites: [PendingCoachWrite] = []
+
+    /// Journal of confirmed coach writes, newest last, capped at `coachWriteLogCap`.
+    @Published private(set) var coachWriteLog: [CoachWriteRecord] = AppStore.loadCoachWriteLog()
+
+    nonisolated private static func loadCoachWriteLog() -> [CoachWriteRecord] {
+        guard let raw = UserDefaults.standard.data(forKey: coachWriteLogKey),
+              let list = try? JSONDecoder().decode([CoachWriteRecord].self, from: raw) else { return [] }
+        return Array(list.suffix(coachWriteLogCap))
+    }
+
+    private func persistCoachWriteLog() {
+        if let raw = try? JSONEncoder().encode(coachWriteLog) {
+            UserDefaults.standard.set(raw, forKey: Self.coachWriteLogKey)
+        }
+    }
+
+    nonisolated static func coachCompactJSON(_ obj: [String: Any]) -> String {
+        guard JSONSerialization.isValidJSONObject(obj),
+              let d = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]),
+              let s = String(data: d, encoding: .utf8) else { return "{}" }
+        return s
+    }
+
+    // MARK: Staging (called only from CoachTools' write tools)
+
+    /// Stage a proposal and return the tool-result string. Does **not** mutate anything.
+    func stageCoachWrite(kind: String, date: String, summary: String, payload: [String: Any]) -> String {
+        let w = PendingCoachWrite(kind: kind, date: date, summary: summary,
+                                  payloadJSON: Self.coachCompactJSON(payload))
+        guard w.isKnownKind else { return "That change isn\u{2019}t supported \u{2014} nothing proposed." }
+        guard stagedCoachWrites.count < Self.coachStagedCap else {
+            return "Too many changes proposed at once \u{2014} nothing proposed. Ask the user first."
+        }
+        stagedCoachWrites.append(w)
+        return Self.coachWriteAck
+    }
+
+    /// Normalize a model-supplied date; anything that isn't a real yyyy-MM-dd becomes today.
+    func coachWriteDate(_ raw: String?) -> String {
+        guard let raw = raw?.trimmingCharacters(in: .whitespaces), raw.count == 10,
+              Self.dateString(Self.parse(raw)) == raw else { return Self.dateString(Date()) }
+        return raw
+    }
+    func coachFoodEntries(on day: String) -> [FoodEntry] { entry(for: day)?.foodEntries ?? [] }
+    func coachMealText(_ key: String, on day: String) -> String {
+        guard Self.mealKeys.contains(key), let e = entry(for: day) else { return "" }
+        return mealText(e, key: key)
+    }
+    func coachPrayerIsOn(_ name: String, on day: String) -> Bool { entry(for: day)?.prayers.isOn(name) ?? false }
+
+    /// Move the staged proposals onto the thread as their own messages. Returns them so the
+    /// caller can append; clears the staging buffer either way.
+    private func drainStagedCoachWrites() -> [PendingCoachWrite] {
+        let staged = stagedCoachWrites
+        stagedCoachWrites = []
+        return staged
+    }
+
+    // MARK: Confirm / dismiss
+
+    private func locateCoachWrite(_ id: String) -> (t: Int, m: Int)? {
+        for (t, thread) in threads.enumerated() {
+            if let m = thread.messages.firstIndex(where: { $0.pendingWrite?.id == id }) { return (t, m) }
+        }
+        return nil
+    }
+
+    /// Apply a proposal the user confirmed. `times`/`nextFajr` come from `PrayerManager` so a
+    /// prayer marked via the coach gets the same on-time classification the Today toggle gives it.
+    func commitCoachWrite(_ w: PendingCoachWrite, times: PrayerTimes? = nil, nextFajr: Date? = nil) {
+        // The persisted message is the source of truth, not the copy the view handed us — a fast
+        // double tap would otherwise log the same food twice.
+        guard let loc = locateCoachWrite(w.id),
+              let stored = threads[loc.t].messages[loc.m].pendingWrite, stored.isPending else { return }
+        guard stored.isKnownKind, let undoJSON = applyCoachWrite(stored, times: times, nextFajr: nextFajr) else {
+            threads[loc.t].messages[loc.m].pendingWrite?.status = "rejected"
+            persistThreads()
+            return
+        }
+        threads[loc.t].messages[loc.m].pendingWrite?.status = "confirmed"
+        persistThreads()
+        coachWriteLog.append(CoachWriteRecord(id: stored.id, epoch: Date().timeIntervalSince1970,
+                                              kind: stored.kind, summary: stored.summary, undoJSON: undoJSON))
+        if coachWriteLog.count > Self.coachWriteLogCap {
+            coachWriteLog.removeFirst(coachWriteLog.count - Self.coachWriteLogCap)
+        }
+        persistCoachWriteLog()
+    }
+
+    func rejectCoachWrite(_ w: PendingCoachWrite) {
+        guard let loc = locateCoachWrite(w.id),
+              threads[loc.t].messages[loc.m].pendingWrite?.isPending == true else { return }
+        threads[loc.t].messages[loc.m].pendingWrite?.status = "rejected"
+        persistThreads()
+    }
+
+    /// Run `body` with the working day temporarily switched to `target`, so a confirm tapped hours
+    /// later still lands on the day the proposal named rather than on "today".
+    private func withCoachDay(_ target: String, _ body: () -> Void) {
+        let original = date
+        if target != original { goTo(date: target) }
+        body()
+        if target != original { goTo(date: original) }
+    }
+
+    /// Perform the write. Returns the undo snapshot, or nil if nothing was applied.
+    private func applyCoachWrite(_ w: PendingCoachWrite, times: PrayerTimes?, nextFajr: Date?) -> String? {
+        let p = (try? JSONSerialization.jsonObject(with: Data(w.payloadJSON.utf8))) as? [String: Any] ?? [:]
+        var undo: [String: Any] = ["date": w.date]
+        var applied = false
+
+        withCoachDay(w.date) {
+            switch w.kind {
+            case "logFood":
+                let key = Self.coachStr(p, "mealKey")
+                guard Self.mealKeys.contains(key) else { return }
+                let food = FoodEntry(mealKey: key, name: Self.coachStr(p, "name"),
+                                     qty: Self.coachNum(p, "qty", 1), servingLabel: "1 serving",
+                                     kcal: Self.coachNum(p, "kcal", 0), protein: Self.coachNum(p, "protein", 0),
+                                     source: .manual)
+                guard !food.name.isEmpty else { return }
+                addFoodEntry(food)
+                undo["op"] = "removeFood"; undo["foodID"] = food.id
+                applied = true
+
+            case "removeFood":
+                let id = Self.coachStr(p, "foodID")
+                guard let existing = draft.foodEntries.first(where: { $0.id == id }) else { return }
+                removeFoodEntry(id)
+                undo["op"] = "addFood"; undo["food"] = Self.coachFoodDict(existing)
+                applied = true
+
+            case "setMealText":
+                let key = Self.coachStr(p, "mealKey")
+                guard Self.mealKeys.contains(key) else { return }
+                undo["op"] = "setMealText"; undo["mealKey"] = key
+                undo["text"] = mealText(draft, key: key)
+                undo["epoch"] = draft.mealTimes[key] ?? 0
+                setMealText(key, Self.coachStr(p, "text"))
+                applied = true
+
+            case "setMealTime":
+                let key = Self.coachStr(p, "mealKey")
+                guard Self.mealKeys.contains(key) else { return }
+                let clear = (p["clear"] as? Bool) ?? false
+                let minutes = Self.coachMinutesOfDay(Self.coachStr(p, "time"))
+                guard clear || minutes != nil else { return }
+                undo["op"] = "setMealTime"; undo["mealKey"] = key
+                undo["epoch"] = draft.mealTimes[key] ?? 0
+                if clear {
+                    setMealTime(key, nil)
+                } else if let m = minutes,
+                          let when = Calendar.current.date(bySettingHour: m / 60, minute: m % 60, second: 0,
+                                                           of: Self.parse(w.date)) {
+                    setMealTime(key, when)
+                } else { return }
+                applied = true
+
+            case "togglePrayer":
+                let name = Self.coachStr(p, "prayer")
+                guard let pn = PrayerTimes.Name(rawValue: name), pn.isPrayer else { return }
+                let want = (p["on"] as? Bool) ?? true
+                undo["op"] = "restorePrayer"; undo["prayer"] = name
+                undo["wasOn"] = draft.prayers.isOn(name)
+                undo["epoch"] = draft.prayers.records[name]?.markedEpoch ?? 0
+                undo["band"] = draft.prayers.band(name).rawValue
+                if draft.prayers.isOn(name) != want {
+                    // Same method the Today toggle uses, so the band/timestamp is recorded.
+                    // Prayer times only classify the current day; a back-dated mark is untimed.
+                    let isTargetToday = w.date == Self.dateString(Date())
+                    togglePrayer(pn, times: isTargetToday ? times : nil, nextFajr: isTargetToday ? nextFajr : nil)
+                }
+                applied = true
+
+            default:
+                return   // unknown kind — never guess, never run it as some other write
+            }
+        }
+        return applied ? Self.coachCompactJSON(undo) : nil
+    }
+
+    // MARK: Undo
+
+    /// Reverse a journaled write and drop it from the journal. Unknown ops are ignored (the
+    /// record is still dropped) rather than being reinterpreted as some other reversal.
+    func undoCoachWrite(_ r: CoachWriteRecord) {
+        let p = (try? JSONSerialization.jsonObject(with: Data(r.undoJSON.utf8))) as? [String: Any] ?? [:]
+        let day = coachWriteDate(p["date"] as? String)
+        withCoachDay(day) {
+            switch Self.coachStr(p, "op") {
+            case "removeFood":
+                removeFoodEntry(Self.coachStr(p, "foodID"))
+            case "addFood":
+                if let d = p["food"] as? [String: Any] { addFoodEntry(Self.coachFoodEntry(d)) }
+            case "setMealText":
+                let key = Self.coachStr(p, "mealKey")
+                setMealText(key, Self.coachStr(p, "text"))
+                let e = Self.coachNum(p, "epoch", 0)
+                setMealTime(key, e > 0 ? Date(timeIntervalSince1970: e) : nil)
+            case "setMealTime":
+                let e = Self.coachNum(p, "epoch", 0)
+                setMealTime(Self.coachStr(p, "mealKey"), e > 0 ? Date(timeIntervalSince1970: e) : nil)
+            case "restorePrayer":
+                let name = Self.coachStr(p, "prayer")
+                guard PrayerTimes.Name(rawValue: name)?.isPrayer == true else { return }
+                let wasOn = (p["wasOn"] as? Bool) ?? false
+                let band = PrayerBand(rawValue: Self.coachStr(p, "band")) ?? .unknown
+                mutate { d in
+                    d.prayers.setOn(name, wasOn, at: Self.coachNum(p, "epoch", 0), band: band)
+                    if name == "fajr" { d.nn.fajr = wasOn }
+                }
+            default:
+                break
+            }
+        }
+        coachWriteLog.removeAll { $0.id == r.id }
+        persistCoachWriteLog()
+        // Keep the card honest — an "Applied" chip must not survive an undo.
+        if let loc = locateCoachWrite(r.id), threads[loc.t].messages[loc.m].pendingWrite?.status == "confirmed" {
+            threads[loc.t].messages[loc.m].pendingWrite?.status = "undone"
+            persistThreads()
+        }
+    }
+
+    // MARK: Shared mutation used by both the coach and (conceptually) the Today meal fields
+
+    /// Set one meal's free text, stamping the eaten time the first time it gets content today —
+    /// the same behaviour as typing into the Today meal field.
+    func setMealText(_ key: String, _ text: String) {
+        guard Self.mealKeys.contains(key) else { return }
+        let stampToday = isToday
+        mutate { e in
+            let wasEmpty: Bool
+            switch key {
+            case "breakfast": wasEmpty = e.meals.breakfast.isEmpty; e.meals.breakfast = text
+            case "snacks": wasEmpty = e.meals.snacks.isEmpty; e.meals.snacks = text
+            case "lunch": wasEmpty = e.meals.lunch.isEmpty; e.meals.lunch = text
+            case "dinner": wasEmpty = e.meals.dinner.isEmpty; e.meals.dinner = text
+            case "drinks": wasEmpty = e.meals.drinks.isEmpty; e.meals.drinks = text
+            default: wasEmpty = false
+            }
+            if wasEmpty && !text.isEmpty && stampToday && e.mealTimes[key] == nil {
+                e.mealTimes[key] = Date().timeIntervalSince1970
+            }
+        }
+    }
+
+    // MARK: Payload helpers (tolerant by design — model-supplied JSON is never trusted)
+
+    nonisolated static func coachStr(_ d: [String: Any], _ k: String) -> String {
+        (d[k] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+    nonisolated static func coachNum(_ d: [String: Any], _ k: String, _ fallback: Double) -> Double {
+        if let v = d[k] as? Double { return v }
+        if let v = d[k] as? Int { return Double(v) }
+        if let s = d[k] as? String, let v = Double(s) { return v }
+        return fallback
+    }
+    /// "13:45" / "1:45 PM" -> minutes since midnight, or nil if it isn't a time.
+    nonisolated static func coachMinutesOfDay(_ raw: String) -> Int? {
+        let s = raw.uppercased().trimmingCharacters(in: .whitespaces)
+        guard !s.isEmpty else { return nil }
+        let pm = s.contains("PM"), am = s.contains("AM")
+        let digits = s.replacingOccurrences(of: "AM", with: "").replacingOccurrences(of: "PM", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        let parts = digits.split(separator: ":")
+        guard let h = Int(parts.first ?? ""), h >= 0, h <= 23 else { return nil }
+        let m = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
+        guard m >= 0, m <= 59 else { return nil }
+        var hour = h
+        if pm && h < 12 { hour += 12 }
+        if am && h == 12 { hour = 0 }
+        return hour * 60 + m
+    }
+    /// Compact food snapshot for undo — micros are deliberately dropped to keep the thread small.
+    nonisolated static func coachFoodDict(_ e: FoodEntry) -> [String: Any] {
+        ["id": e.id, "mealKey": e.mealKey, "name": e.name, "qty": e.qty, "servingLabel": e.servingLabel,
+         "kcal": e.kcal, "protein": e.protein, "carbs": e.carbs, "fat": e.fat, "fiber": e.fiber,
+         "sodium": e.sodium, "source": e.source.rawValue]
+    }
+    nonisolated static func coachFoodEntry(_ d: [String: Any]) -> FoodEntry {
+        FoodEntry(id: coachStr(d, "id").isEmpty ? UUID().uuidString : coachStr(d, "id"),
+                  mealKey: mealKeys.contains(coachStr(d, "mealKey")) ? coachStr(d, "mealKey") : "snacks",
+                  name: coachStr(d, "name"), qty: coachNum(d, "qty", 1),
+                  servingLabel: coachStr(d, "servingLabel"), kcal: coachNum(d, "kcal", 0),
+                  protein: coachNum(d, "protein", 0), carbs: coachNum(d, "carbs", 0),
+                  fat: coachNum(d, "fat", 0), fiber: coachNum(d, "fiber", 0), sodium: coachNum(d, "sodium", 0),
+                  micros: [], source: FoodSource(rawValue: coachStr(d, "source")) ?? .manual)
     }
 
     /// System preamble: who the user is, today's numbers, targets, prize, recent days.
