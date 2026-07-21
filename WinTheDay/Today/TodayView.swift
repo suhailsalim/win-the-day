@@ -29,6 +29,7 @@ struct TodayView: View {
     @State private var showCheckIn = false
     @State private var showWindDown = false
     @EnvironmentObject var windDownRouter: WindDownRouter
+    @State private var showRegimens = false
 
     private struct MealKey: Identifiable { let id: String }
     private struct ExportedText: Identifiable { let id = UUID(); let text: String }
@@ -51,6 +52,7 @@ struct TodayView: View {
         .sheet(isPresented: $showHistory) { HistoryView() }
         .sheet(isPresented: $showQibla) { QiblaView() }
         .sheet(isPresented: $showHabits) { HabitsEditorView() }
+        .sheet(isPresented: $showRegimens) { RegimenEditorView() }
         .sheet(isPresented: $showStudy) { StudyManageView() }
         .sheet(isPresented: $showChat) { CoachChatListView() }
         .sheet(isPresented: $showWorkout) { WorkoutView() }
@@ -227,6 +229,7 @@ struct TodayView: View {
             case "health": healthCard
             case "meals": mealsModule
             case "hydration": hydrationModule
+            case "regimen": regimenModule
             case "quickLog": quickLog
             case "habits": habitsSection
             case "score": scoreCard
@@ -802,6 +805,130 @@ struct TodayView: View {
     @ViewBuilder private var photosModule: some View {
         SectionHeader(text: "Photos", color: store.moduleColor("photos"))
         photosSection
+    }
+
+    // MARK: - Meds & supplements (adherence record only — the app never advises on doses)
+
+    /// One recorded dose, identified by regimen + slot (a regimen can appear in several slots).
+    private struct RegimenMark: Identifiable { let regimenID: String; let slot: RegimenSlot
+        var id: String { "\(regimenID)#\(slot.rawValue)" }
+    }
+
+    /// Doses recorded on this day whose regimen is no longer scheduled (edited or deleted), so
+    /// history still renders with a name instead of vanishing.
+    private var regimenHistoryRows: [RegimenMark] {
+        let scheduled = Set(store.regimenSchedule(for: store.date).flatMap { s, items in items.map { "\($0.id)#\(s.rawValue)" } })
+        return store.draft.regimenTaken
+            .flatMap { id, slots in RegimenSlot.sorted(slots).map { RegimenMark(regimenID: id, slot: $0) } }
+            .filter { !scheduled.contains($0.id) }
+            .sorted { store.regimenName($0.regimenID) < store.regimenName($1.regimenID) }
+    }
+
+    @ViewBuilder private var regimenModule: some View {
+        let groups = store.regimenSchedule(for: store.date)
+        let history = regimenHistoryRows
+        // Nothing scheduled and nothing recorded — non-users never see this module (like the fitness card).
+        if !groups.isEmpty || !history.isEmpty {
+            HStack {
+                SectionHeader(text: "Meds & supplements", color: store.moduleColor("regimen"))
+                Spacer()
+                Button { showRegimens = true } label: {
+                    Text("Edit").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                }.padding(.trailing, 8).padding(.top, 22)
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(groups.enumerated()), id: \.element.slot) { gIdx, group in
+                    HStack(spacing: 6) {
+                        Image(systemName: group.slot.symbol).font(.system(size: 11)).foregroundStyle(store.moduleColor("regimen"))
+                        Text(group.slot.label.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(0.3)
+                            .foregroundStyle(Theme.tertiaryInk)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16).padding(.top, gIdx == 0 ? 12 : 14).padding(.bottom, 4)
+                    ForEach(Array(group.items.enumerated()), id: \.element.id) { idx, r in
+                        regimenRow(r, slot: group.slot)
+                        if idx < group.items.count - 1 { Hairline().padding(.leading, 16) }
+                    }
+                }
+                if !history.isEmpty {
+                    HStack(spacing: 6) {
+                        Text("ALSO LOGGED").font(.system(size: 11, weight: .semibold)).tracking(0.3)
+                            .foregroundStyle(Theme.tertiaryInk)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16).padding(.top, groups.isEmpty ? 12 : 14).padding(.bottom, 4)
+                    ForEach(history) { h in
+                        regimenHistoryRow(h.regimenID, slot: h.slot)
+                    }
+                }
+            }
+            .padding(.bottom, 10)
+            .glassList()
+        }
+    }
+
+    private func regimenRow(_ r: Regimen, slot: RegimenSlot) -> some View {
+        let on = store.isRegimenTaken(r.id, slot: slot, in: store.draft)
+        let markedAt = store.regimenTakenDate(r.id, slot: slot, in: store.draft)
+        return Button { store.toggleRegimen(r.id, slot: slot) } label: {
+            HStack(spacing: 11) {
+                Image(systemName: r.kind.symbol).font(.system(size: 14))
+                    .foregroundStyle(store.moduleColor("regimen")).frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(r.name).font(.system(size: 15.5)).foregroundStyle(Theme.ink)
+                    HStack(spacing: 6) {
+                        if !r.dose.isEmpty {
+                            Text(r.dose).font(.system(size: 12)).foregroundStyle(Theme.secondaryInk)
+                        }
+                        if r.withFood { withFoodChip(slot) }
+                        if on, let markedAt {
+                            Text("logged \(timeStr(markedAt))").font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk)
+                        }
+                    }
+                }
+                Spacer()
+                Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22)).foregroundStyle(on ? Theme.sage : Color(white: 0.47).opacity(0.3))
+            }
+            .padding(.horizontal, 16).padding(.vertical, 11)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// "With food" links visually to the meal that sits closest to the slot — ticked once that
+    /// meal is logged. Purely a visual cue about the user's own record.
+    private func withFoodChip(_ slot: RegimenSlot) -> some View {
+        let key = Self.mealKeyForSlot(slot)
+        let logged = store.draft.mealTimes[key] != nil || store.draft.foodEntries.contains { $0.mealKey == key }
+        return Text(logged ? "with food \u{00b7} \(key) logged" : "with food \u{00b7} \(key)")
+            .font(.system(size: 10.5, weight: .medium))
+            .foregroundStyle(logged ? Theme.sage : Theme.tertiaryInk)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(Capsule().fill((logged ? Theme.sage : Color(white: 0.47)).opacity(0.12)))
+    }
+
+    private static func mealKeyForSlot(_ slot: RegimenSlot) -> String {
+        switch slot {
+        case .morning: return "breakfast"
+        case .midday: return "lunch"
+        case .evening, .night: return "dinner"
+        }
+    }
+
+    private func regimenHistoryRow(_ id: String, slot: RegimenSlot) -> some View {
+        HStack(spacing: 11) {
+            Image(systemName: "checkmark.circle.fill").font(.system(size: 14))
+                .foregroundStyle(Theme.sage).frame(width: 22)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(store.regimenName(id)).font(.system(size: 15.5)).foregroundStyle(Theme.ink)
+                Text(slot.label.lowercased()).font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk)
+            }
+            Spacer()
+            Button { store.toggleRegimen(id, slot: slot) } label: {
+                Text("Undo").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
+            }.buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 11)
     }
 
     // MARK: - Date header (navigate to any past day)

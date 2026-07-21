@@ -16,6 +16,7 @@ struct TrendsView: View {
                 readinessCard
                 eatingCard
                 microsCard
+                regimenCard
                 trainingCard
                 MilestonesCard()
                 rangePicker
@@ -309,6 +310,48 @@ struct TrendsView: View {
                         }
                     }
                     Text("Estimates from your logged items & AI meal estimate. Reference values are general adult guidance.")
+                        .font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk).padding(.top, 2)
+                }
+            }
+            .padding(.top, 12)
+        }
+    }
+
+    /// 30-day adherence per scheduled item: marked doses / scheduled doses. A record of what the
+    /// user logged — never a judgement, a target, or advice about any medication.
+    @ViewBuilder private var regimenCard: some View {
+        let rows = store.activeRegimens.compactMap { r -> (Regimen, Int, Int)? in
+            guard let a = store.regimenAdherence(r), a.scheduled > 0 else { return nil }
+            return (r, a.taken, a.scheduled)
+        }
+        if !rows.isEmpty {
+            GlassCard(padding: 16) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Meds & supplements · 30 days").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                        Spacer()
+                        Text("doses marked").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                    }
+                    ForEach(rows, id: \.0.id) { r, taken, scheduled in
+                        let ratio = Double(taken) / Double(scheduled)
+                        let pct = Int((ratio * 100).rounded())
+                        let barColor: Color = pct < 80 ? Color(hex: 0xD86B4A) : Theme.sage
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text(r.name).font(.system(size: 13)).foregroundStyle(Theme.ink)
+                                Spacer()
+                                Text("\(taken)/\(scheduled) · \(pct)%").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                            }
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color(white: 0.5).opacity(0.15)).frame(height: 6)
+                                    Capsule().fill(barColor).frame(width: geo.size.width * min(1, ratio), height: 6)
+                                }
+                            }
+                            .frame(height: 6)
+                        }
+                    }
+                    Text("Counts the days already finished. Tracking only \u{2014} the app never advises on doses.")
                         .font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk).padding(.top, 2)
                 }
             }

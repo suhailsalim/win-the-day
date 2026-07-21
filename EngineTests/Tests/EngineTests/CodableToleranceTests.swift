@@ -84,7 +84,15 @@ final class CodableToleranceTests: XCTestCase {
         e.status = "travel"
         e.mainFocus = "finish the physiology deck"
         e.mainFocusDone = true
+        e.regimenTaken = ["reg-1": ["morning", "evening"], "reg-2": ["night"]]
+        e.regimenTakenAt = ["reg-1#morning": 1_772_001_100, "reg-1#evening": 1_772_045_000]
         return e
+    }
+
+    private func filledRegimen() -> Regimen {
+        Regimen(id: "reg-1", name: "Vitamin D", dose: "1000 IU",
+                timesOfDay: ["morning", "evening"], daysOfWeek: [2, 4, 6], withFood: true,
+                kind: .med, active: false, remind: false, startEpoch: 1_770_000_000)
     }
 
     private func filledCheckIn() -> DayCheckIn {
@@ -140,6 +148,8 @@ final class CodableToleranceTests: XCTestCase {
         d.rings = [RingDef(source: .custom, metric: .hydrationPct, title: "Water", goal: 3000,
                            colorHex: 0x33AACC, enabled: false, order: 7)]
         d.earnedMilestones = [EarnedMilestone(id: "days-100", earnedEpoch: 1_772_000_000)]
+        d.regimens = [filledRegimen()]
+        d.retiredRegimens = [RetiredRegimen(id: "reg-9", name: "Old iron tablet")]
         return d
     }
 
@@ -200,6 +210,7 @@ final class CodableToleranceTests: XCTestCase {
         m.coach = false; m.prayer = false; m.health = false; m.meals = false
         m.hydration = false; m.quickLog = false; m.workStudy = false; m.training = false
         m.photos = false; m.fasting = true; m.sleep = false; m.weather = false
+        m.regimen = false
         m.order = Array(ModulePrefs.defaultOrder.reversed())
         try roundTrip(m)
 
@@ -237,6 +248,67 @@ final class CodableToleranceTests: XCTestCase {
         XCTAssertEqual(back.healthNotes, original.healthNotes)
         XCTAssertEqual(back.rings, original.rings)
         XCTAssertEqual(back.earnedMilestones, original.earnedMilestones)
+        XCTAssertEqual(back.regimens, original.regimens)
+        XCTAssertEqual(back.retiredRegimens, original.retiredRegimens)
+    }
+
+    /// `AppData.regimens` decodes as one array, so a missing tolerant line on `Regimen` would wipe
+    /// every scheduled medication/supplement the user has, not just one field.
+    func testRegimenRoundTripAndDefaults() throws {
+        try roundTrip(filledRegimen())
+        try roundTrip(RetiredRegimen(id: "reg-9", name: "Old iron tablet"))
+
+        let r = try decodeEmpty(Regimen.self)
+        XCTAssertEqual(r.name, "")
+        XCTAssertEqual(r.dose, "")
+        XCTAssertEqual(r.timesOfDay, [RegimenSlot.morning.rawValue])
+        XCTAssertEqual(r.daysOfWeek, [1, 2, 3, 4, 5, 6, 7])
+        XCTAssertFalse(r.withFood)
+        XCTAssertEqual(r.kind, .supplement)
+        XCTAssertTrue(r.active)
+        XCTAssertTrue(r.remind)
+        XCTAssertEqual(r.startEpoch, 0)
+        XCTAssertFalse(r.id.isEmpty, "a missing id must get a fresh UUID, not an empty string")
+
+        let retired = try decodeEmpty(RetiredRegimen.self)
+        XCTAssertEqual(retired.id, "")
+        XCTAssertEqual(retired.name, "")
+
+        // Garbage in one key falls back rather than taking the regimen (and the list) down.
+        let junk = try decode(Regimen.self, #"{"id":"reg-2","name":"Iron","kind":"vitamin","daysOfWeek":"every day","active":"yes"}"#)
+        XCTAssertEqual(junk.id, "reg-2")
+        XCTAssertEqual(junk.name, "Iron")
+        XCTAssertEqual(junk.kind, .supplement)
+        XCTAssertEqual(junk.daysOfWeek, [1, 2, 3, 4, 5, 6, 7])
+        XCTAssertTrue(junk.active)
+    }
+
+    /// Weekday storage is Sunday-based 1–7 (`DateComponents.weekday`) and must not depend on the
+    /// user's `firstWeekday`, which only affects UI layout.
+    func testRegimenSchedulingUsesSundayBasedWeekdays() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC") ?? .current
+        // 2026-03-04 is a Wednesday (weekday 4); 2026-03-05 a Thursday (weekday 5).
+        var comps = DateComponents(); comps.year = 2026; comps.month = 3; comps.day = 4
+        let wednesday = try XCTUnwrap(cal.date(from: comps))
+        comps.day = 5
+        let thursday = try XCTUnwrap(cal.date(from: comps))
+        XCTAssertEqual(cal.component(.weekday, from: wednesday), 4)
+
+        let r = Regimen(name: "Vitamin D", timesOfDay: ["morning"], daysOfWeek: [4])
+        XCTAssertTrue(r.scheduled(on: wednesday, calendar: cal))
+        XCTAssertFalse(r.scheduled(on: thursday, calendar: cal))
+
+        // A start date in the future means the day isn't scheduled yet.
+        var later = r
+        later.startEpoch = thursday.timeIntervalSince1970
+        XCTAssertFalse(later.scheduled(on: wednesday, calendar: cal))
+
+        // Inactive or slot-less regimens are never scheduled.
+        var off = r; off.active = false
+        XCTAssertFalse(off.scheduled(on: wednesday, calendar: cal))
+        var noSlots = r; noSlots.timesOfDay = ["whenever"]
+        XCTAssertFalse(noSlots.scheduled(on: wednesday, calendar: cal))
     }
 
     // MARK: - Types reachable from AppData as whole arrays

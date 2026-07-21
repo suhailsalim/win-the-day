@@ -552,6 +552,7 @@ struct SettingsView: View {
     }
 
     private let colorableModules = ["rings", "coach", "weather", "prayer", "quran", "fasting", "sleep", "health", "meals", "hydration",
+                                    "regimen",
                                     "quickLog", "habits", "score", "workStudy", "training", "photos"]
 
     private var moduleColorsCard: some View {
