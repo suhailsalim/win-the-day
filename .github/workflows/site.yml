@@ -1,0 +1,68 @@
+name: site
+
+# Publishes the public site to GitHub Pages:
+#   /          -> website/index.html          (landing page)
+#   /privacy/  -> website/privacy/            (privacy policy)
+#   /support/  -> website/support/            (support page)
+#   /docs/     -> the MkDocs Material build of docs/
+#
+# One-time repo setup (cannot be done from a workflow): Settings -> Pages -> Build and
+# deployment -> Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'website/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two Pages deploys race; queue instead of cancelling a half-finished one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # MkDocs 2.0 is announced as backward-incompatible (plugins and theming removed) and
+      # would break Material, so pin below it. Material 9.x is what this repo builds with.
+      - name: Install MkDocs
+        run: pip install 'mkdocs<2' 'mkdocs-material>=9.7,<10'
+
+      # The guide is served under /docs/, so it builds straight into _site/docs.
+      - name: Build docs
+        run: mkdocs build --strict --site-dir _site/docs
+
+      # Then the hand-written landing/legal pages are laid over the site root. Dotfiles are
+      # included ("website/." rather than "website/*") in case a CNAME or .nojekyll lands there.
+      - name: Overlay landing page
+        run: cp -R website/. _site/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

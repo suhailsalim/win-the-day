@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<!--
+  Win the Day — landing page.
+
+  Hand-written static HTML. No framework, no build step, no JavaScript, no analytics, no
+  external requests of any kind (the privacy story has to be true of the site too).
+
+  Link rules: every link is RELATIVE. The site is published on a GitHub Pages *project*
+  page (https://<user>.github.io/win-the-day/), so it is not at the domain root — an
+  absolute "/docs/" would 404 there. The site's own pages are linked as
+  "privacy/index.html" rather than "privacy/" so this file also works when opened straight
+  off disk with file://. The docs/ links point at the MkDocs build, which only exists on
+  the deployed site.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Win the Day — run your whole day, stored only on your phone</title>
+<meta name="description" content="A native iOS app for nutrition, training, sleep, prayer, study and planning — scored honestly by on-device formulas, coached by the AI provider you choose, and stored entirely on your device.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <img src="assets/icon.png" alt="Win the Day app icon">
+      <span>Win the Day</span>
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="docs/">Docs</a>
+      <a href="privacy/index.html">Privacy</a>
+      <a href="support/index.html">Support</a>
+      <a href="https://github.com/suhailaka/win-the-day">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="wrap">
+      <img class="app-icon" src="assets/icon.png" alt="Win the Day app icon">
+      <h1>Win the Day</h1>
+      <p class="tagline">Run your whole day — scored honestly, coached by AI, stored only on your phone.</p>
+      <p class="sub">
+        Nutrition, training, sleep, prayer, study and planning in one native iOS app,
+        with an Apple Watch companion, widgets and Live Activities.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#">Download on the App Store</a>
+        <a class="btn btn-ghost" href="docs/guide/getting-started/">Read the guide</a>
+      </div>
+      <p class="badge-note">Not on the App Store yet — the guide and the source are available today.</p>
+    </div>
+  </section>
+
+  <!-- Three pillars — text lifted from the docs' "Why it's different". -->
+  <section>
+    <div class="wrap">
+      <div class="grid grid-3">
+
+        <div class="card pillar">
+          <span class="mark" aria-hidden="true"></span>
+          <h3>Private by design</h3>
+          <p>
+            No backend, no account, no analytics. Your data is JSON on your phone and AI keys
+            live in the iOS Keychain. The only network calls are to the AI provider <em>you</em>
+            choose and free public data services for weather and food lookups.
+          </p>
+        </div>
+
+        <div class="card pillar sage">
+          <span class="mark" aria-hidden="true"></span>
+          <h3>Deterministic scores, not vibes</h3>
+          <p>
+            Sleep, Readiness, Active, Eating and Prayer-timing scores are pure on-device formulas
+            over your Apple Health data and your logs — the same inputs always produce the same
+            number. The AI explains your scores; it never invents them.
+          </p>
+        </div>
+
+        <div class="card pillar deep">
+          <span class="mark" aria-hidden="true"></span>
+          <h3>Faith as a first-class pillar</h3>
+          <p>
+            Astronomical prayer times computed on-device and madhab-aware, on-time prayer
+            tracking with neutral timing bands, a Qibla compass and fasting windows — all
+            optional, and all customizable.
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature grid — mirrors the feature map in docs/index.md, one card per guide page. -->
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">What you get</p>
+        <h2>One app for the whole day</h2>
+        <p>Every card links straight into that part of the user guide.</p>
+      </div>
+
+      <div class="grid grid-4">
+
+        <a class="card feature" href="docs/guide/today/">
+          <h3>Today &amp; rings</h3>
+          <p>A configurable ring row, habit checklist, quick logging, and a day score with a streak that survives a legitimate off-day.</p>
+          <span class="more">Read more &rarr;</span>
+        </a>
+
+        <a class="card feature" href="docs/guide/food/">
+          <h3>Food</h3>
+          <p>Free-text meals with an AI estimate, a structured food log, barcode scanning, a personal food library, and an Eating score.</p>
+          <span class="more">Read more &rarr;</span>
+        </a>
+
+        <a class="card feature" href="docs/guide/faith/">
+          <h3>Faith</h3>
+          <p>Prayer times and notifications, on-time bands, Qibla compass, fasting tracker and Live Activities.</p>
+          <span class="more">Read more &rarr;</span>
+        </a>
+
+        <a class="card feature" href="docs/guide/sleep/">
+          <h3>Sleep</h3>
+          <p>HealthKit sleep stages, WHOOP-style Sleep and Readiness scores, and a plan for tonight.</p>
+          <span class="more">Read more &rarr;</span>
+        </a>
+
+        <a class="card feature" href="docs/guide/coach/">
+          <h3>AI coach</h3>
+          <p>Multi-thread chat that reads your live data through tools — on Anthropic, OpenAI, Gemini, OpenRouter, DeepSeek, Ollama or Apple Intelligence.</p>
+          <span class="more">Read more &rarr;</span>
+        </a>
+
+        <a class="card feature" href="docs/guide/planning/">
+          <h3>Planning</h3>
+          <p>Week outlook, routines turned into scheduled sessions, occasions and trips with AI plans, and calendar sync.</p>
+          <span class="more">Read more &rarr;</span>
+        </a>
+
+        <a class="card feature" href="docs/guide/trends/">
+          <h3>Trends</h3>
+          <p>Charts, a history browser, progress photos, a doctor-ready PDF report, and lab or InBody imports.</p>
+          <span class="more">Read more &rarr;</span>
+        </a>
+
+        <a class="card feature" href="docs/guide/widgets/">
+          <h3>Widgets &amp; Watch</h3>
+          <p>Home and Lock Screen widgets, a watchOS app and complications, fed by a shared on-device snapshot.</p>
+          <span class="more">Read more &rarr;</span>
+        </a>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshot strip. The frames are grey placeholders until real PNGs are dropped into
+       website/assets/ — see website/assets/README.md for the four screens to capture. -->
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">A look at it</p>
+        <h2>Four screens</h2>
+      </div>
+
+      <div class="shots">
+        <figure class="shot">
+          <div class="shot-frame shot-1" role="img" aria-label="The Today tab, showing the ring row and the day's habit checklist"></div>
+          <figcaption>Today — rings &amp; habits</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot-frame shot-2" role="img" aria-label="The prayer module, showing today's prayer times and on-time tracking"></div>
+          <figcaption>Prayer times &amp; on-time bands</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot-frame shot-3" role="img" aria-label="A coach conversation, where the AI answers using the day's logged data"></div>
+          <figcaption>The coach, reading your data</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="shot-frame shot-4" role="img" aria-label="The sleep card, showing sleep stages and the Sleep and Readiness scores"></div>
+          <figcaption>Sleep &amp; readiness</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- Privacy strip -->
+  <section>
+    <div class="wrap">
+      <div class="card callout">
+        <h2>Your day stays on your device</h2>
+        <p>
+          There is no account to create, nothing to sync, and no server we operate. The one
+          honest caveat: AI features send the relevant text to the provider you picked — and
+          you can avoid even that by running a local Ollama model or Apple Intelligence.
+        </p>
+        <p><a href="privacy/index.html">Read the privacy policy</a></p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <nav aria-label="Footer">
+      <a href="docs/">Docs</a>
+      <a href="privacy/index.html">Privacy</a>
+      <a href="support/index.html">Support</a>
+      <a href="https://github.com/suhailaka/win-the-day">GitHub</a>
+    </nav>
+    <p class="fine">Win the Day is an independent iOS app. Built with SwiftUI. MIT licensed.</p>
+  </div>
+</footer>
+
+</body>
+</html>

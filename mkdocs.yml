@@ -1,8 +1,11 @@
 site_name: Win the Day
 site_description: A local-first iOS companion for health, discipline, faith, and focus.
-site_url: https://suhailaka.github.io/win-the-day/
+# The docs are published under /docs/ on the Pages site; the landing page (website/) owns
+# the root. See .github/workflows/site.yml.
+site_url: https://suhailaka.github.io/win-the-day/docs/
 repo_url: https://github.com/suhailaka/win-the-day
 docs_dir: docs
+use_directory_urls: true
 
 # Internal planning docs live in docs/plans/ for repo organization but are not part of the
 # rendered site (they link to source files, which MkDocs can't resolve).

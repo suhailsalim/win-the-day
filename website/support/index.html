@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<!--
+  Support page — the address App Store Connect asks for as the app's support URL.
+  Three jobs: point at the guide and FAQ, give a real contact address, and give a place to
+  file a bug. The quick answers below are condensed from docs/guide/faq.md — keep them in
+  sync with that page rather than inventing new ones.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support — Win the Day</title>
+<meta name="description" content="Help for Win the Day: the user guide, the FAQ, a contact address and where to report a bug.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../assets/icon.png">
+<link rel="apple-touch-icon" href="../assets/icon.png">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="../index.html">
+      <img src="../assets/icon.png" alt="Win the Day app icon">
+      <span>Win the Day</span>
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../docs/">Docs</a>
+      <a href="../privacy/index.html">Privacy</a>
+      <a href="../support/index.html">Support</a>
+      <a href="https://github.com/suhailaka/win-the-day">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section>
+    <div class="wrap page">
+
+      <h1>Support</h1>
+      <p class="meta">Everything for Win the Day on iOS, its Apple Watch app and its widgets.</p>
+
+      <div class="card">
+        <h3>Start with the guide</h3>
+        <p>
+          The <a href="../docs/guide/getting-started/">user guide</a> covers onboarding,
+          connecting Apple Health and setting up an AI provider in about five minutes, and
+          then walks through every screen.
+        </p>
+        <p style="margin:0">
+          <a href="../docs/">Browse all documentation &rarr;</a>
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>Frequently asked questions</h3>
+        <p>
+          The <a href="../docs/guide/faq/">FAQ</a> answers the common ones. A few in short:
+        </p>
+        <ul>
+          <li><strong>Do I need an Apple Watch?</strong> No — everything works phone-only. A Watch adds sleep stages, overnight HRV and per-minute heart rate, which sharpen the scores.</li>
+          <li><strong>Do I need to pay for AI?</strong> No. All scoring, logging, prayer times and planning are deterministic and local. Apple Intelligence and a local Ollama model are no-cost AI options.</li>
+          <li><strong>Why does a ring say "calibrating"?</strong> Sleep and Readiness compare you to your own baseline, which needs about a week of data.</li>
+          <li><strong>My prayer times look off.</strong> Check calculation method, branch and madhab in Settings &rarr; Faith — Asr in particular differs by madhab — and confirm the app has location access.</li>
+          <li><strong>My widget isn't updating.</strong> Widgets read a snapshot the app writes; open the app once and give iOS a moment. iOS also throttles widget refreshes system-wide.</li>
+        </ul>
+        <p style="margin:0"><a href="../docs/guide/faq/">Read the full FAQ &rarr;</a></p>
+      </div>
+
+      <div class="card">
+        <h3>Report a bug or request a feature</h3>
+        <p>
+          File it on <a href="https://github.com/suhailaka/win-the-day/issues">GitHub Issues</a>.
+          The most useful reports include your iOS version, iPhone model, what you did, what you
+          expected, and what happened instead. Please don't paste API keys or personal health
+          details into a public issue.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>Email</h3>
+        <p style="margin:0">
+          For anything else, including privacy questions and App Store issues:
+          <a href="mailto:suhails.letterbox@gmail.com">suhails.letterbox@gmail.com</a>.
+          It's a one-developer project, so replies can take a few days.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>Your data</h3>
+        <p style="margin:0">
+          Win the Day stores your day on your device and has no account system, so there is
+          nothing for support to look up on your behalf and no password to reset. See the
+          <a href="../privacy/index.html">privacy policy</a> for exactly what leaves the phone.
+        </p>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <nav aria-label="Footer">
+      <a href="../index.html">Home</a>
+      <a href="../docs/">Docs</a>
+      <a href="../privacy/index.html">Privacy</a>
+      <a href="https://github.com/suhailaka/win-the-day">GitHub</a>
+    </nav>
+    <p class="fine">Win the Day is an independent iOS app. Built with SwiftUI. MIT licensed.</p>
+  </div>
+</footer>
+
+</body>
+</html>
