@@ -43,6 +43,7 @@ struct SettingsView: View {
             if provider.id == "ollama" { ollamaHostCard }
             if provider.allowsCustomModel && store.settings.model == "custom" { customModelCard }
             testConnectionCard
+            coachWritesCard
 
             SectionHeader(text: "Hydration")
             hydrationCard
@@ -322,6 +323,28 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16).padding(.vertical, 10)
             }
+        }
+        .glassList()
+        .padding(.top, 12)
+    }
+
+    /// Coach write tools. Off = the write-tool schemas are never sent to the provider at all, so
+    /// the model can't call what it can't see; read-only questions keep working either way.
+    private var coachWritesCard: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Coach can propose changes").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                    Text("Log food, set meal text/times, mark prayers \u{2014} always as a card you confirm first")
+                        .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                ToggleRow(on: store.settings.coachWritesEnabled) {
+                    store.updateSettings { $0.coachWritesEnabled.toggle() }
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
         }
         .glassList()
         .padding(.top, 12)

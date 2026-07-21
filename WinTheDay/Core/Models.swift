@@ -1378,6 +1378,10 @@ struct AppSettings: Codable, Equatable {
     var windDownEnabled = true
     var windDownHour = -1           // -1 = auto (recommended bedtime − 45 min); 0–23 = fixed hour
 
+    // Coach write tools (see AI/CoachTools.swift). When off, the write-tool schemas are never sent
+    // to the provider at all — the model cannot call what it cannot see.
+    var coachWritesEnabled = true
+
     init() {}
 
     init(from decoder: Decoder) throws {
@@ -1406,6 +1410,7 @@ struct AppSettings: Codable, Equatable {
         windDownEnabled = (try? c.decode(Bool.self, forKey: .windDownEnabled)) ?? true
         let windHour = (try? c.decode(Int.self, forKey: .windDownHour)) ?? -1
         windDownHour = min(23, max(-1, windHour))
+        coachWritesEnabled = (try? c.decode(Bool.self, forKey: .coachWritesEnabled)) ?? true
     }
 }
 
@@ -1643,20 +1648,97 @@ struct WorkVocab {
     }
 }
 
+// MARK: - Coach write proposals (staged; nothing mutates until the user confirms)
+
+/// A change the coach has **proposed**. While one of these exists nothing in the user's data has
+/// moved — it renders as a Confirm / Dismiss card in the chat and only `AppStore.commitCoachWrite`
+/// turns it into a real mutation.
+///
+/// `kind` and `status` stay plain strings so a value we don't recognise (a model hallucinating a
+/// tool name, or a thread written by a newer build) decodes to something **inert** instead of
+/// throwing: an unknown kind becomes `unknown` and is never dispatched, and an unknown status
+/// becomes `rejected` so it can never be executed as some other write.
+struct PendingCoachWrite: Codable, Equatable, Identifiable {
+    static let unknownKind = "unknown"
+    static let kinds = ["logFood", "setMealText", "setMealTime", "togglePrayer", "removeFood"]
+    static let statuses = ["pending", "confirmed", "rejected", "undone"]
+
+    var id: String = UUID().uuidString
+    var kind: String = PendingCoachWrite.unknownKind
+    var date: String = ""            // yyyy-MM-dd target day (re-resolved at commit, never "today")
+    var summary: String = ""         // the human line shown on the card
+    var payloadJSON: String = "{}"   // kind-specific args, re-parsed on commit (kept compact)
+    var status: String = "pending"   // pending | confirmed | rejected | undone
+
+    var isPending: Bool { status == "pending" }
+    var isKnownKind: Bool { PendingCoachWrite.kinds.contains(kind) }
+
+    static func normalizedKind(_ raw: String) -> String { kinds.contains(raw) ? raw : unknownKind }
+    /// Anything unrecognised is treated as `rejected` — inert is always the safe fallback here.
+    static func normalizedStatus(_ raw: String) -> String { statuses.contains(raw) ? raw : "rejected" }
+
+    init(kind: String, date: String, summary: String, payloadJSON: String) {
+        self.kind = Self.normalizedKind(kind)
+        self.date = date
+        self.summary = summary
+        self.payloadJSON = payloadJSON
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        kind = Self.normalizedKind((try? c.decode(String.self, forKey: .kind)) ?? "")
+        date = (try? c.decode(String.self, forKey: .date)) ?? ""
+        summary = (try? c.decode(String.self, forKey: .summary)) ?? ""
+        payloadJSON = (try? c.decode(String.self, forKey: .payloadJSON)) ?? "{}"
+        status = Self.normalizedStatus((try? c.decode(String.self, forKey: .status)) ?? "")
+    }
+}
+
+/// One journal entry for a coach write the user actually confirmed. `undoJSON` carries the
+/// snapshot needed to reverse it (prior meal text, the removed food, the prior prayer band …) —
+/// deliberately small: no photos, no base64, and the journal itself is capped.
+struct CoachWriteRecord: Codable, Equatable, Identifiable {
+    var id: String = UUID().uuidString
+    var epoch: Double = 0
+    var kind: String = PendingCoachWrite.unknownKind
+    var summary: String = ""
+    var undoJSON: String = "{}"
+
+    init(id: String, epoch: Double, kind: String, summary: String, undoJSON: String) {
+        self.id = id; self.epoch = epoch
+        self.kind = PendingCoachWrite.normalizedKind(kind)
+        self.summary = summary; self.undoJSON = undoJSON
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        epoch = (try? c.decode(Double.self, forKey: .epoch)) ?? 0
+        kind = PendingCoachWrite.normalizedKind((try? c.decode(String.self, forKey: .kind)) ?? "")
+        summary = (try? c.decode(String.self, forKey: .summary)) ?? ""
+        undoJSON = (try? c.decode(String.self, forKey: .undoJSON)) ?? "{}"
+    }
+}
+
 // MARK: - Coach chat
 
 struct ChatMessage: Codable, Identifiable, Equatable {
     var id = UUID().uuidString
     var role: String          // "user" | "assistant"
     var text: String
+    /// Set when this message *is* a staged write proposal — the chat renders a confirm card
+    /// instead of a bubble. Nil for ordinary turns.
+    var pendingWrite: PendingCoachWrite? = nil
     var isUser: Bool { role == "user" }
 
-    init(role: String, text: String) { self.role = role; self.text = text }
+    init(role: String, text: String, pendingWrite: PendingCoachWrite? = nil) {
+        self.role = role; self.text = text; self.pendingWrite = pendingWrite
+    }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
         role = (try? c.decode(String.self, forKey: .role)) ?? "assistant"
         text = (try? c.decode(String.self, forKey: .text)) ?? ""
+        pendingWrite = try? c.decode(PendingCoachWrite.self, forKey: .pendingWrite)
     }
 }
 
