@@ -79,7 +79,7 @@ struct SettingsView: View {
                     Image(systemName: "circle.grid.2x2").foregroundStyle(Theme.accentDark)
                     Text("Manage rings").font(.system(size: 16)).foregroundStyle(Theme.ink)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 13).glassList()
             }
@@ -102,7 +102,7 @@ struct SettingsView: View {
                     Image(systemName: "arrow.up.arrow.down").foregroundStyle(Theme.accentDark)
                     Text("Reorder modules").font(.system(size: 16)).foregroundStyle(Theme.ink)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 13).glassList()
             }
@@ -114,7 +114,7 @@ struct SettingsView: View {
                     Image(systemName: "sparkles").foregroundStyle(Theme.accentDark)
                     Text("Run setup again").font(.system(size: 16)).foregroundStyle(Theme.ink)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 13).glassList()
             }
@@ -132,7 +132,7 @@ struct SettingsView: View {
             if !store.importMessage.isEmpty {
                 Text(store.importMessage)
                     .font(.system(size: 13))
-                    .foregroundStyle(store.importMessage.hasPrefix("Restored") ? Color(hex: 0x3DA876) : Color(hex: 0xD86B4A))
+                    .foregroundStyle(store.importMessage.hasPrefix("Restored") ? Theme.sage : Theme.coral)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.top, 10)
             }
@@ -142,7 +142,7 @@ struct SettingsView: View {
                 .padding(.horizontal, 16).padding(.top, 8)
 
             Text("Win the Day · v1.0\nNo accounts. No backend. Your data, your device.")
-                .font(.system(size: 12)).foregroundStyle(Color(white: 0.27).opacity(0.4))
+                .font(.system(size: 12)).foregroundStyle(Theme.quaternaryInk)
                 .multilineTextAlignment(.center)
                 .padding(.top, 22)
         }
@@ -186,7 +186,7 @@ struct SettingsView: View {
                     Spacer()
                     Text(provider.name).font(.system(size: 16)).foregroundStyle(Theme.tertiaryInk)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                        .font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
                         .rotationEffect(.degrees(providersOpen ? 90 : 0))
                 }
                 .padding(.horizontal, 16).padding(.vertical, 13)
@@ -251,9 +251,10 @@ struct SettingsView: View {
         case "gemini": return [Color(hex: 0x6FA8FF), Color(hex: 0x3B6CF0)]
         case "openrouter": return [Color(hex: 0x8E7CF0), Color(hex: 0x5B45D6)]
         case "deepseek": return [Color(hex: 0x5B8DEF), Color(hex: 0x2E5BC8)]
-        case "ollama": return [Color(hex: 0x9AA0A6), Color(hex: 0x3C4043)]
-        case "ollamacloud": return [Color(hex: 0x7D8590), Color(hex: 0x1F2328)]
-        default: return [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)]
+        // The two near-black vendor greys would sink into the dark card, so they get lifted.
+        case "ollama": return [Color(hex: 0x9AA0A6), Theme.adaptive(light: 0x3C4043, darkGrey: 0x5F656C)]
+        case "ollamacloud": return [Color(hex: 0x7D8590), Theme.adaptive(light: 0x1F2328, darkGrey: 0x4A515C)]
+        default: return [Theme.adaptive(light: 0x6470A6, darkGrey: 0x6E7AB8), Theme.adaptive(light: 0x3B4A7C, darkGrey: 0x44528C)]
         }
     }
 
@@ -304,7 +305,7 @@ struct SettingsView: View {
                     case .ok:
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.sage)
                     case .failed:
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(Color(hex: 0xD86B4A))
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.coral)
                     default:
                         EmptyView()
                     }
@@ -323,7 +324,7 @@ struct SettingsView: View {
             } else if case .failed(let msg) = testState {
                 Hairline()
                 Text(msg)
-                    .font(.system(size: 12)).foregroundStyle(Color(hex: 0x3B4A7C))
+                    .font(.system(size: 12)).foregroundStyle(Theme.accentDark)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16).padding(.vertical, 10)
@@ -464,8 +465,8 @@ struct SettingsView: View {
                 Divider().frame(height: 22)
                 Button(action: inc) { stepIcon("plus") }
             }
-            .background(Capsule().fill(Color.white.opacity(0.5)))
-            .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
+            .background(Capsule().fill(Theme.surfaceOverlay))
+            .overlay(Capsule().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
     }
@@ -481,7 +482,7 @@ struct SettingsView: View {
             Text(label).font(.system(size: 16)).foregroundStyle(Theme.ink)
             Spacer()
             Text(value).font(.system(size: 16)).foregroundStyle(Theme.tertiaryInk)
-            Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+            Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(Theme.quaternaryInk)
         }
         .padding(.horizontal, 16).padding(.vertical, 13)
     }
@@ -712,7 +713,7 @@ struct SettingsView: View {
                             Text("Plan around your real schedule").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
                         }
                         Spacer()
-                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
                     }
                     .padding(.horizontal, 16).padding(.vertical, 13)
                 }
@@ -777,8 +778,8 @@ struct SettingsView: View {
                                 Text(p.label).font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(on ? .white : Theme.ink)
                                     .padding(.horizontal, 13).padding(.vertical, 8)
-                                    .background(Capsule().fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Color.white.opacity(0.55))))
-                                    .overlay(Capsule().strokeBorder(.white.opacity(on ? 0 : 0.6), lineWidth: 0.5))
+                                    .background(Capsule().fill(on ? AnyShapeStyle(Theme.accentDark) : AnyShapeStyle(Theme.surfaceOverlay)))
+                                    .overlay(Capsule().strokeBorder(Theme.surfaceStroke.opacity(on ? 0 : 1), lineWidth: 0.5))
                             }.buttonStyle(.plain)
                         }
                     }
@@ -867,7 +868,7 @@ struct SettingsView: View {
     private var prayerCard: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                IconTile(symbol: "moon.stars.fill", colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)])
+                IconTile(symbol: "moon.stars.fill", colors: [Theme.adaptive(light: 0x6470A6, darkGrey: 0x6E7AB8), Theme.adaptive(light: 0x3B4A7C, darkGrey: 0x44528C)])
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Islamic prayers").font(.system(size: 16)).foregroundStyle(Theme.ink)
                     Text(prayer.placeName.isEmpty ? "Times, Qibla & reminders"
@@ -917,7 +918,7 @@ struct SettingsView: View {
             if !prayer.statusNote.isEmpty {
                 Hairline()
                 Text(prayer.statusNote)
-                    .font(.system(size: 12)).foregroundStyle(Color(hex: 0xD86B4A))
+                    .font(.system(size: 12)).foregroundStyle(Theme.coral)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16).padding(.vertical, 10)
             }
@@ -1109,7 +1110,7 @@ struct SettingsView: View {
     private var privacyCard: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                IconTile(symbol: "lock.fill", colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)])
+                IconTile(symbol: "lock.fill", colors: [Theme.adaptive(light: 0x6470A6, darkGrey: 0x6E7AB8), Theme.adaptive(light: 0x3B4A7C, darkGrey: 0x44528C)])
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Require \(AppLock.biometryLabel)").font(.system(size: 16)).foregroundStyle(Theme.ink)
                     Text("Lock Win the Day when you leave it").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
@@ -1131,7 +1132,7 @@ struct SettingsView: View {
             if !lockNote.isEmpty {
                 Hairline()
                 Text(lockNote)
-                    .font(.system(size: 12)).foregroundStyle(Color(hex: 0xD86B4A))
+                    .font(.system(size: 12)).foregroundStyle(Theme.coral)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16).padding(.vertical, 9)
             }
@@ -1180,7 +1181,7 @@ struct SettingsView: View {
                     IconTile(symbol: "icloud.and.arrow.up.fill", colors: [Color(hex: 0x6FA8FF), Color(hex: 0x3B6CF0)])
                     Text("Back up to iCloud Drive / Files").font(.system(size: 16)).foregroundStyle(Theme.ink)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 11)
             }
@@ -1191,7 +1192,7 @@ struct SettingsView: View {
                     IconTile(symbol: "icloud.and.arrow.down.fill", colors: [Color(hex: 0x7AD7B0), Color(hex: 0x16A06A)])
                     Text("Restore from a backup").font(.system(size: 16)).foregroundStyle(Theme.ink)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.quaternaryInk)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 11)
             }
@@ -1199,7 +1200,7 @@ struct SettingsView: View {
             Hairline()
             Button { confirmReset = true } label: {
                 HStack {
-                    Text("Reset all data").font(.system(size: 16)).foregroundStyle(Color(hex: 0xD86B4A))
+                    Text("Reset all data").font(.system(size: 16)).foregroundStyle(Theme.coral)
                     Spacer()
                 }
                 .padding(.horizontal, 16).padding(.vertical, 13)
@@ -1251,7 +1252,7 @@ struct RestoreConfirmSheet: View {
                         Text("Replace my data")
                             .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
                             .frame(maxWidth: .infinity).padding(.vertical, 14)
-                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(hex: 0xD86B4A)))
+                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.coral))
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal, 16).padding(.top, 18)

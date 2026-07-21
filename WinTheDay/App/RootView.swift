@@ -96,7 +96,7 @@ struct TabBar: View {
                         Text(item.label)
                             .font(.system(size: 10, weight: .semibold))
                     }
-                    .foregroundStyle(tab == item.tab ? Theme.accentDark : Color(white: 0.54))
+                    .foregroundStyle(tab == item.tab ? Theme.accentDark : Theme.tertiaryInk)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background {
@@ -121,13 +121,13 @@ struct TabBar: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .fill(Color.white.opacity(0.44))
+                        .fill(Theme.surfaceOverlay)
                 )
         )
         .overlay(
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.7), lineWidth: 0.5)
+                .strokeBorder(Theme.surfaceStroke, lineWidth: 0.5)
         )
-        .shadow(color: Color(hex: 0x2A3350).opacity(0.18), radius: 17, x: 0, y: 10)
+        .shadow(color: Theme.adaptive(light: 0x2A3350, darkGrey: 0x000000).opacity(0.18), radius: 17, x: 0, y: 10)
     }
 }

@@ -38,7 +38,7 @@ struct OnboardingView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 6) {
                     ForEach(0..<steps.count, id: \.self) { i in
-                        Capsule().fill(i <= index ? Theme.accentDark : Color(white: 0.27).opacity(0.18))
+                        Capsule().fill(i <= index ? Theme.accentDark : Theme.quaternaryInk.opacity(0.45))
                             .frame(width: i == index ? 20 : 6, height: 6)
                     }
                 }
@@ -56,7 +56,9 @@ struct OnboardingView: View {
                 .font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
                 .frame(maxWidth: .infinity).padding(.vertical, 15)
                 .background(RoundedRectangle(cornerRadius: 16)
-                    .fill(LinearGradient(colors: [Color(hex: 0x6470A6), Color(hex: 0x3B4A7C)], startPoint: .top, endPoint: .bottom)))
+                    .fill(LinearGradient(colors: [Theme.adaptive(light: 0x6470A6, darkGrey: 0x6E7AB8),
+                                                  Theme.adaptive(light: 0x3B4A7C, darkGrey: 0x44528C)],
+                                         startPoint: .top, endPoint: .bottom)))
                 .padding(.horizontal, 22).padding(.bottom, 6)
 
                 if index > 0 {
@@ -101,10 +103,10 @@ struct OnboardingView: View {
                             Text(p.title).font(.system(size: 16)).foregroundStyle(Theme.ink)
                             Spacer()
                             Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(on ? Theme.sage : Color(white: 0.47).opacity(0.3))
+                                .foregroundStyle(on ? Theme.sage : Theme.tertiaryInk.opacity(0.3))
                         }
                         .padding(.horizontal, 14).padding(.vertical, 13)
-                        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(on ? 0.7 : 0.4)))
+                        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.surfaceOverlay.opacity(on ? 1 : 0.55)))
                     }.buttonStyle(.plain)
                 }
             }
@@ -151,7 +153,7 @@ struct OnboardingView: View {
                     DatePicker("Date", selection: $countdownDate, in: Date()..., displayedComponents: .date)
                         .tint(Theme.accentDark).font(.system(size: 15))
                         .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay))
                 }
             }
         }
@@ -219,14 +221,14 @@ struct OnboardingView: View {
                             if p.id == store.settings.provider { Image(systemName: "checkmark.circle.fill").foregroundStyle(Theme.accentDark) }
                         }
                         .padding(.horizontal, 14).padding(.vertical, 11)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(p.id == store.settings.provider ? 0.7 : 0.4)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay.opacity(p.id == store.settings.provider ? 1 : 0.55)))
                     }.buttonStyle(.plain)
                 }
                 if Providers.provider(store.settings.provider).needsKey {
                     SecureField("Paste API key", text: $apiKey)
                         .font(.system(size: 15)).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .padding(.horizontal, 12).padding(.vertical, 11)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.6)))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay))
                         .onChange(of: apiKey) { _, v in Keychain.set(v, for: store.settings.provider) }
                 }
             }
@@ -271,8 +273,8 @@ struct OnboardingView: View {
                 }.buttonStyle(.plain)
             }
         }
-        .background(Color.white.opacity(0.5)).clipShape(Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.7), lineWidth: 0.5))
+        .background(Theme.surfaceOverlay).clipShape(Capsule())
+        .overlay(Capsule().strokeBorder(Theme.surfaceStroke, lineWidth: 0.5))
     }
 
     private func menuRow<C: View>(_ label: String, _ value: String, @ViewBuilder menu: () -> C) -> some View {
@@ -281,10 +283,10 @@ struct OnboardingView: View {
                 Text(label).font(.system(size: 15)).foregroundStyle(Theme.ink)
                 Spacer()
                 Text(value).font(.system(size: 15)).foregroundStyle(Theme.tertiaryInk)
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: 11)).foregroundStyle(Color(white: 0.27).opacity(0.3))
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 11)).foregroundStyle(Theme.quaternaryInk)
             }
             .padding(.horizontal, 14).padding(.vertical, 11)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay))
         }
     }
 
@@ -296,7 +298,7 @@ struct OnboardingView: View {
                 .font(.system(size: 15)).foregroundStyle(Theme.ink).frame(maxWidth: 160)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay))
     }
 
     private func stepper(_ label: String, _ value: String, _ dec: @escaping () -> Void, _ inc: @escaping () -> Void) -> some View {
@@ -309,10 +311,10 @@ struct OnboardingView: View {
                 Button(action: inc) { Image(systemName: "plus").frame(width: 36, height: 30) }
             }
             .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.accentDark)
-            .background(Capsule().fill(Color.white.opacity(0.6)))
+            .background(Capsule().fill(Theme.surfaceOverlay))
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.5)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.surfaceOverlay))
     }
 
     private func fmt(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(format: "%.1f", d) }
