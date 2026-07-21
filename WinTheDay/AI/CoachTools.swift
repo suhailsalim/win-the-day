@@ -40,7 +40,7 @@ enum CoachToolRegistry {
                   parameters: ["date": ["type": "string", "description": "yyyy-MM-dd; omit for today"]], required: [],
                   run: { store, args in store.toolGetPrayers(dateArg(args)) }),
 
-        CoachTool(name: "getHealthIndex", description: "Get the user's health profile: latest body composition, recent labs, and health notes (conditions/meds/injuries/goals).",
+        CoachTool(name: "getHealthIndex", description: "Get the user's health profile: latest body composition, recent labs, health notes (conditions/meds/injuries/goals), plus the latest value, general-range status and trend direction for every lab analyte they have imported.",
                   parameters: [:], required: [], run: { store, _ in store.toolGetHealthIndex() }),
 
         CoachTool(name: "getTargets", description: "Get the user's configured targets: calories, protein, steps, study/focus hours, and priority metric.",

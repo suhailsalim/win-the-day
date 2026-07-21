@@ -60,13 +60,26 @@ struct AIEstimator {
     }
 
     /// Parse a health-checkup / lab report into a list of measurements.
-    func parseLabs(text: String?, imageBase64: String?, settings: AppSettings) async throws -> (title: String, items: [LabItem]) {
+    ///
+    /// `collectedDate` is the date printed on the report (sample collection / report date) — it is
+    /// almost never the day the user imports it, and every Biology series is built on it. Empty
+    /// string when the report doesn't print one; the caller then falls back to the import date.
+    ///
+    /// Qualitative results ("Negative", "Trace", "Nil") must be **skipped**, not emitted as 0:
+    /// `LabItem.value` is a `Double`, so a 0 would poison that analyte's whole trend line.
+    func parseLabs(text: String?, imageBase64: String?, settings: AppSettings) async throws -> (title: String, items: [LabItem], collectedDate: String) {
         let prompt = """
         You are reading a medical lab / health-checkup report. Extract every numeric test result.
         \(text.map { "Notes: \($0)" } ?? "")
         Respond with ONLY this JSON:
-        {"title":"e.g. Lipid panel / Full checkup","items":[{"name":"Total Cholesterol","value":0,"unit":"mg/dL"}]}
-        Use the report's units. Numbers only for value. Include every result you can read.
+        {"title":"e.g. Lipid panel / Full checkup","collectedDate":"2026-05-12","items":[{"name":"Total Cholesterol","value":0,"unit":"mg/dL"}]}
+        collectedDate = the sample-collection date printed on the report in yyyy-MM-dd; if the report
+        shows no date, return "".
+        Use the report's own units verbatim (mg/dL, mmol/L, g/dL, ng/mL …) — do not convert anything.
+        Use the report's own test names. value must be a number.
+        SKIP any result that is not numeric (Negative, Positive, Trace, Nil, Absent, "<0.01") —
+        omit that item entirely rather than writing 0.
+        Include every numeric result you can read, even unusual ones.
         """
         let out = try await complete(prompt: prompt, imageBase64: imageBase64, settings: settings, jsonOnly: true)
         guard let o = Self.parseObject(out) else { throw AIError.badResponse }
@@ -76,7 +89,10 @@ struct AIEstimator {
             guard let name = d["name"] as? String else { return nil }
             return LabItem(name: name, value: num(d["value"]), unit: (d["unit"] as? String) ?? "")
         }
-        return (title, items)
+        let collected = ((o["collectedDate"] as? String) ?? "").trimmingCharacters(in: .whitespaces)
+        // Only accept a well-formed yyyy-MM-dd key — anything else falls back to the import date.
+        let validDate = BiologyCatalog.dayNumber(collected) != nil ? collected : ""
+        return (title, items, validDate)
     }
 
     /// Split a free-text meal ("2 dosa and a coffee") into structured, per-serving food items.

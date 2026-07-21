@@ -21,7 +21,7 @@ let package = Package(
                       "Engines/RingEngine.swift", "Engines/ReadinessScorer.swift",
                       "Engines/SleepPlanner.swift", "Engines/PrayerTimes.swift",
                       "Engines/Milestones.swift", "Engines/ReminderEngine.swift",
-                      "Engines/QuranProgress.swift"]),
+                      "Engines/QuranProgress.swift", "Engines/BiologyCatalog.swift"]),
         .testTarget(name: "EngineTests", dependencies: ["AppCore"],
                     path: "Tests/EngineTests")
     ]

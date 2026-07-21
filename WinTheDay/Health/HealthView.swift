@@ -17,6 +17,8 @@ struct HealthView: View {
             SectionHeader(text: "Import reports")
             importSection
             if !store.data.bodyComps.isEmpty || !store.data.labs.isEmpty {
+                SectionHeader(text: "Biology")
+                biologyCard
                 SectionHeader(text: "Recent imports")
                 recentImports
             }
@@ -34,11 +36,44 @@ struct HealthView: View {
         .sheet(item: $importMode) { mode in ImportReportView(mode: mode) }
         .sheet(isPresented: $showNote) { HealthNoteEditor(note: editNote) }
         .sheet(item: $editNote) { n in HealthNoteEditor(note: n) }
+        .sheet(isPresented: $showBiology) { BiologyView() }
     }
 
     @State private var importMode: ImportReportView.Mode?
     @State private var showNote = false
     @State private var editNote: HealthNote?
+    @State private var showBiology = false
+
+    // MARK: - Biology entry point
+
+    /// Everything imported, pivoted from reports to measurements. The Health tab lives inside the
+    /// root `ScrollView` (no NavigationStack), so Biology is presented as a sheet and owns its own
+    /// stack for the analyte detail push.
+    private var biologyCard: some View {
+        Button { showBiology = true } label: {
+            HStack(spacing: 12) {
+                IconTile(symbol: "chart.xyaxis.line", colors: [Color(hex: 0x5FE08A), Color(hex: 0x16B45A)])
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Biology").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                    Text(biologySubtitle).font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color(white: 0.27).opacity(0.3))
+            }
+            .padding(.horizontal, 16).padding(.vertical, 13)
+        }
+        .buttonStyle(.plain)
+        .glassList()
+    }
+
+    private var biologySubtitle: String {
+        let n = store.biologySeries.count
+        let latest = store.data.labs.map { BiologyCatalog.effectiveDate($0) }.filter { !$0.isEmpty }.max()
+        let count = "\(n) measurement\(n == 1 ? "" : "s")"
+        guard let latest else { return count }
+        return "\(count) \u{00b7} last report \(latest)"
+    }
 
     private var notesSection: some View {
         VStack(spacing: 0) {
