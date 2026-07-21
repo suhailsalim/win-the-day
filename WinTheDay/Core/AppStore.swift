@@ -89,6 +89,7 @@ final class AppStore: ObservableObject {
         if data.habits.isEmpty { data.habits = HabitDef.defaults; persistData() }
         if data.rings.isEmpty { data.rings = RingDef.defaults; persistData() }
         migrateExamIfNeeded()
+        backfillBiologyIfNeeded()   // stamps canonical analyte ids onto pre-Biology lab reports
         self.draft = loadDraft(for: today)
         loadThreads()
         scheduleMilestoneCheck()   // grants anything historical once, as a single summary
@@ -2237,15 +2238,101 @@ final class AppStore: ObservableObject {
         return comp
     }
 
-    func importLabs(text: String?, imageBase64: String?, health: HealthManager) async throws -> LabRecord {
+    /// Parse a lab report and normalise it onto the biology catalog. **Nothing is saved here** —
+    /// re-uploading a report the user already has is common, so the caller resolves the duplicate
+    /// prompt first and then calls `commitLabImport`. Apple Health is only written on commit, so a
+    /// cancelled duplicate leaves no trace anywhere.
+    func prepareLabImport(text: String?, imageBase64: String?) async throws -> (record: LabRecord, duplicateOf: LabRecord?) {
         let parsed = try await estimator.parseLabs(text: text, imageBase64: imageBase64, settings: settings)
-        var items = parsed.items
-        let writtenNames = health.writeLabs(items, settings: settings)
-        for i in items.indices where writtenNames.contains(items[i].name) { items[i].written = true }
-        let record = LabRecord(date: date, title: parsed.title, items: items)
-        data.labs.insert(record, at: 0)
+        let record = BiologyCatalog.normalized(
+            LabRecord(date: date, title: parsed.title, items: parsed.items, collectedDate: parsed.collectedDate)
+        )
+        return (record, BiologyCatalog.duplicate(of: record, in: data.labs))
+    }
+
+    /// Save a prepared report. `replacing` swaps an existing record in place (the "Replace" answer
+    /// to the duplicate prompt) so counts stay unchanged; `nil` appends it as a new report.
+    @discardableResult
+    func commitLabImport(_ record: LabRecord, replacing existing: LabRecord?, health: HealthManager) -> LabRecord {
+        var r = record
+        let writtenNames = health.writeLabs(r.items, settings: settings)
+        for i in r.items.indices where writtenNames.contains(r.items[i].name) { r.items[i].written = true }
+        if let existing, let idx = data.labs.firstIndex(where: { $0.id == existing.id }) {
+            r.id = existing.id
+            data.labs[idx] = r
+        } else {
+            data.labs.insert(r, at: 0)
+        }
         persistData()
-        return record
+        return r
+    }
+
+    // MARK: - Biology (canonical analyte series over every report)
+
+    /// One-time migration: stamp `canonicalId` onto reports imported before the catalog existed.
+    /// Idempotent and cheap; the flag stops it re-persisting on every launch. Unknown analytes stay
+    /// `nil` on purpose — they keep the report's own name and still show up in the browser.
+    func backfillBiologyIfNeeded() {
+        let key = "biology_backfill_v1"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        if BiologyCatalog.backfill(&data.labs) { persistData() }
+        UserDefaults.standard.set(true, forKey: key)
+    }
+
+    /// Every measurement the user has ever had, newest reading last, grouped later by category.
+    var biologySeries: [BiologyCatalog.SeriesItem] {
+        BiologyCatalog.allSeries(labs: data.labs, bodyComps: data.bodyComps)
+    }
+
+    /// Daily app metrics the Biology detail view correlates labs against. Each lab reading is paired
+    /// against the metric's trailing 30-day mean, so these are plain per-day values.
+    var biologyMetrics: [BiologyCatalog.MetricSeries] {
+        let days = data.entries.values.sorted { $0.date < $1.date }
+        func series(_ id: String, _ name: String, _ pick: (Entry) -> Double?) -> BiologyCatalog.MetricSeries? {
+            let daily = days.compactMap { e -> (date: String, value: Double)? in
+                guard !e.date.isEmpty, let v = pick(e) else { return nil }
+                return (e.date, v)
+            }
+            return daily.count >= 5 ? BiologyCatalog.MetricSeries(id: id, name: name, daily: daily) : nil
+        }
+        return [
+            series("weight", "your weight") { Double($0.weight).flatMap { $0 > 0 ? $0 : nil } },
+            series("readiness", "your Readiness score") { $0.readiness > 0 ? Double($0.readiness) : nil },
+            series("sleep", "your average sleep") { e in
+                guard let s = e.sleep, s.asleepMin > 0 else { return nil }
+                return s.asleepMin / 60
+            },
+            series("protein", "your protein intake") { Double($0.proteinG).flatMap { $0 > 0 ? $0 : nil } }
+        ].compactMap { $0 }
+    }
+
+    /// Compact per-analyte digest for the coach's `getHealthIndex` tool: latest value, its date,
+    /// whether it sits inside the general reference range, and the direction of travel. Factual
+    /// record only — the coach explains, it never diagnoses.
+    func biologyDigest(limit: Int = 24) -> String {
+        let series = biologySeries.filter { !$0.points.isEmpty }
+        guard !series.isEmpty else { return "" }
+        let lines = series.prefix(limit).map { s -> String in
+            let latest = s.latest
+            let value = latest.map { fmtT($0.value) } ?? "—"
+            var bits = "- \(s.displayName): \(value)\(s.unit.isEmpty ? "" : " " + s.unit)"
+            if let latest { bits += " (\(latest.date))" }
+            switch BiologyCatalog.status(value: latest?.value ?? 0, def: s.def, sexMale: targets.sexMale) {
+            case .below: bits += " · below general range"
+            case .above: bits += " · above general range"
+            case .inRange: bits += " · within general range"
+            case .unknown: break
+            }
+            switch BiologyCatalog.trend(s.points) {
+            case .up: bits += " · rising"
+            case .down: bits += " · falling"
+            case .flat: bits += " · steady"
+            case .none: bits += " · one reading"
+            }
+            return bits
+        }
+        return "\n\nBIOLOGY — latest measurement per analyte (general reference ranges, not a diagnosis;"
+             + " never interpret or advise, point the user to their doctor)\n" + lines.joined(separator: "\n")
     }
 
     func addBaselineBodyComp(weight: Double?, visceralFat: Double?, health: HealthManager) {
@@ -3002,8 +3089,9 @@ final class AppStore: ObservableObject {
         }
         let regimenSection = regimens.isEmpty ? "" :
             "\n\nSCHEDULED MEDS/SUPPLEMENTS (user's own record; do not advise on doses)\n" + regimens.joined(separator: "\n")
-        if h.isEmpty && regimenSection.isEmpty { return "No health profile recorded yet." }
-        return (h.isEmpty ? "No health notes recorded yet." : h) + regimenSection
+        let biology = biologyDigest()
+        if h.isEmpty && regimenSection.isEmpty && biology.isEmpty { return "No health profile recorded yet." }
+        return (h.isEmpty ? "No health notes recorded yet." : h) + regimenSection + biology
     }
 
     func toolGetTargets() -> String {

@@ -28,6 +28,11 @@ struct ImportReportView: View {
     @State private var error = ""
     @State private var compResult: BodyComp?
     @State private var labResult: LabRecord?
+    // Re-uploading the same report is common — a parsed record waits here until the user answers
+    // Replace / Keep both / Cancel. Nothing is saved (and nothing reaches Apple Health) until then.
+    @State private var pendingLab: LabRecord?
+    @State private var duplicateOf: LabRecord?
+    @State private var showDuplicate = false
 
     var body: some View {
         NavigationStack {
@@ -63,8 +68,25 @@ struct ImportReportView: View {
             .fileImporter(isPresented: $showPDF, allowedContentTypes: [.pdf]) { result in
                 if case .success(let url) = result { loadPDF(url) }
             }
+            .confirmationDialog(duplicateMessage, isPresented: $showDuplicate, titleVisibility: .visible) {
+                Button("Replace") { commitPending(replacing: duplicateOf) }
+                Button("Keep both") { commitPending(replacing: nil) }
+                Button("Cancel", role: .cancel) { pendingLab = nil; duplicateOf = nil }
+            }
         }
         .tint(Theme.accentDark)
+    }
+
+    private var duplicateMessage: String {
+        let d = duplicateOf.map { BiologyCatalog.effectiveDate($0) } ?? ""
+        return "This looks like a report you already imported\(d.isEmpty ? "" : " on \(d)")."
+    }
+
+    private func commitPending(replacing existing: LabRecord?) {
+        guard let record = pendingLab else { return }
+        labResult = store.commitLabImport(record, replacing: existing, health: health)
+        pendingLab = nil; duplicateOf = nil
+        Task { await health.refresh() }
     }
 
     private var sourceCard: some View {
@@ -132,6 +154,9 @@ struct ImportReportView: View {
     private func labsResultCard(_ r: LabRecord) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(r.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+            if !r.collectedDate.isEmpty {
+                Text("Collected \(r.collectedDate)").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+            }
             ForEach(r.items) { item in
                 HStack {
                     Text(item.name).font(.system(size: 14)).foregroundStyle(Theme.ink)
@@ -172,7 +197,12 @@ struct ImportReportView: View {
             case .bodyComp:
                 compResult = try await store.importBodyComp(text: t.isEmpty ? nil : t, imageBase64: imageBase64, health: health)
             case .labs:
-                labResult = try await store.importLabs(text: t.isEmpty ? nil : t, imageBase64: imageBase64, health: health)
+                let out = try await store.prepareLabImport(text: t.isEmpty ? nil : t, imageBase64: imageBase64)
+                if let dup = out.duplicateOf {
+                    pendingLab = out.record; duplicateOf = dup; showDuplicate = true
+                } else {
+                    labResult = store.commitLabImport(out.record, replacing: nil, health: health)
+                }
             }
             await health.refresh()
         } catch {

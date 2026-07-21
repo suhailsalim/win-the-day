@@ -815,9 +815,14 @@ struct LabItem: Codable, Equatable, Identifiable {
     var value: Double
     var unit: String
     var written: Bool = false    // whether it was saved to Apple Health
+    /// Canonical analyte id from `BiologyCatalog` (e.g. "hba1c"). `nil` = this report's own name is
+    /// the series key — an unknown analyte is never dropped, it just lives under "Other".
+    var canonicalId: String? = nil
 
-    init(id: String = UUID().uuidString, name: String, value: Double, unit: String, written: Bool = false) {
+    init(id: String = UUID().uuidString, name: String, value: Double, unit: String,
+         written: Bool = false, canonicalId: String? = nil) {
         self.id = id; self.name = name; self.value = value; self.unit = unit; self.written = written
+        self.canonicalId = canonicalId
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -826,17 +831,24 @@ struct LabItem: Codable, Equatable, Identifiable {
         value = (try? c.decode(Double.self, forKey: .value)) ?? 0
         unit = (try? c.decode(String.self, forKey: .unit)) ?? ""
         written = (try? c.decode(Bool.self, forKey: .written)) ?? false
+        canonicalId = try? c.decodeIfPresent(String.self, forKey: .canonicalId)
     }
 }
 
 struct LabRecord: Codable, Identifiable, Equatable {
     var id = UUID().uuidString
-    var date: String
+    var date: String                 // yyyy-MM-dd the report was imported
     var title: String
     var items: [LabItem]
+    /// yyyy-MM-dd printed on the report as the collection/sample date. Empty for reports imported
+    /// before this existed (and whenever the parser can't find one) — use
+    /// `BiologyCatalog.effectiveDate(_:)`, never this field raw.
+    var collectedDate: String = ""
 
-    init(id: String = UUID().uuidString, date: String, title: String, items: [LabItem]) {
+    init(id: String = UUID().uuidString, date: String, title: String, items: [LabItem],
+         collectedDate: String = "") {
         self.id = id; self.date = date; self.title = title; self.items = items
+        self.collectedDate = collectedDate
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -844,6 +856,7 @@ struct LabRecord: Codable, Identifiable, Equatable {
         date = (try? c.decode(String.self, forKey: .date)) ?? ""
         title = (try? c.decode(String.self, forKey: .title)) ?? ""
         items = (try? c.decode([LabItem].self, forKey: .items)) ?? []
+        collectedDate = (try? c.decode(String.self, forKey: .collectedDate)) ?? ""
     }
 }
 
