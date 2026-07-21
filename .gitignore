@@ -17,6 +17,7 @@ xcuserdata/
 # Swift Package Manager
 .build/
 .swiftpm/
+EngineTests/.build/
 
 # OpenWolf (per-developer project intelligence; regenerate with `openwolf init` / `openwolf scan`)
 .wolf/

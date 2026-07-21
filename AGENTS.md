@@ -110,6 +110,8 @@ Plans live in `docs/plans/`; project skills in `.claude/skills/`; user docs in `
 1. Build green (device destination; add `SWIFT_STRICT_CONCURRENCY=complete` if you touched a manager).
 2. Install on device; sanity-check the touched screen.
 3. Confirm prior data still loads (tolerant decoding) — open the app, check past entries.
+4. `cd EngineTests && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test`
+   (pure-engine + codable-tolerance suite — a missing tolerant decode line fails the round-trip tests).
 
 ## Feature docs
 
