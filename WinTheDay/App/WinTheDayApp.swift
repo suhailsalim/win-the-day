@@ -11,6 +11,7 @@ struct WinTheDayApp: App {
     @StateObject private var calendar = CalendarManager()
     @StateObject private var weather = WeatherManager()
     @StateObject private var lock = AppLock()
+    @StateObject private var windDownRouter = WindDownRouter()   // routes a tapped `winddown-` nudge
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -25,6 +26,7 @@ struct WinTheDayApp: App {
                 .environmentObject(calendar)
                 .environmentObject(weather)
                 .environmentObject(lock)
+                .environmentObject(windDownRouter)
                 .tint(Theme.accentDark)
                 .preferredColorScheme(.light)
                 // App lock: privacy cover + Face ID gate, drawn above every tab.
@@ -36,11 +38,13 @@ struct WinTheDayApp: App {
                 // Cold launch: `.onChange(of: scenePhase)` isn't guaranteed to fire for the very
                 // first `.active`, and a Siri/widget write made before launch must not be lost.
                 .task { store.reconcileIntentWrites(prayerTimes: prayer.today, nextFajr: prayer.nextFajr) }
+                .task { windDownRouter.start() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 store.writeAutoBackup()
                 store.refreshSmartReminders(force: true)
+                store.refreshWindDown(force: true)
             }
             // Re-read anything an intent wrote while we were suspended, *before* any in-app edit
             // can persist our stale cache over it. Cheap no-op when nothing was written.

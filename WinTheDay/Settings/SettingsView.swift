@@ -50,6 +50,9 @@ struct SettingsView: View {
             SectionHeader(text: "Smart reminders")
             smartRemindersCard
 
+            SectionHeader(text: "Evening wind-down")
+            windDownCard
+
             SectionHeader(text: "Prayer times")
             prayerCard
 
@@ -494,6 +497,39 @@ struct SettingsView: View {
             ToggleRow(on: on) { store.updateSmartReminders(change) }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    // MARK: - Evening wind-down (Today/WindDownView)
+
+    private var windDownCard: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Wind-down nudge").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                    Text("Close today, then name tomorrow's one thing — replaces the plain bedtime nudge")
+                        .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                }
+                Spacer()
+                ToggleRow(on: store.settings.windDownEnabled) {
+                    store.updateWindDown { $0.windDownEnabled.toggle() }
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            if store.settings.windDownEnabled {
+                Hairline()
+                // −1 is "auto": 45 minutes before tonight's recommended bedtime, which moves with
+                // the sleep plan. Stepping below 0 returns to it.
+                stepperRow("Fires at",
+                           value: store.settings.windDownHour < 0 ? "Auto" : "\(store.settings.windDownHour):00",
+                           dec: { store.updateWindDown { $0.windDownHour = max(-1, $0.windDownHour - 1) } },
+                           inc: { store.updateWindDown { $0.windDownHour = min(23, $0.windDownHour + 1) } })
+                Text(store.settings.windDownHour < 0 ? "Auto = 45 min before the recommended bedtime." : "")
+                    .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                    .padding(.horizontal, 16).padding(.bottom, store.settings.windDownHour < 0 ? 10 : 0)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .glassList()
     }
 
     // MARK: - Personalize (pillar names + module colors)

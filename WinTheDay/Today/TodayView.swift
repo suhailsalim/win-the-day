@@ -27,6 +27,8 @@ struct TodayView: View {
     @State private var showFoodAdd = false
     @State private var foodAddMeal = "breakfast"
     @State private var showCheckIn = false
+    @State private var showWindDown = false
+    @EnvironmentObject var windDownRouter: WindDownRouter
 
     private struct MealKey: Identifiable { let id: String }
     private struct ExportedText: Identifiable { let id = UUID(); let text: String }
@@ -67,6 +69,12 @@ struct TodayView: View {
                 Task { await store.computeReadiness(for: store.date, health: health) }
             }
         }
+        // Evening wind-down: opened from the header chip or by tapping the `winddown-` notification.
+        .sheet(isPresented: $showWindDown) { WindDownView() }
+        .onChange(of: windDownRouter.open) { _, open in
+            if open { showWindDown = true; windDownRouter.open = false }
+        }
+        .task(id: store.sleepPlanTonight?.recommendedBedEpoch) { store.refreshWindDown(force: true) }
         // Milestones: one calm sheet per earned record (or one summary for a historical batch).
         .sheet(item: Binding(get: { store.justEarned },
                              set: { if $0 == nil { store.dismissMilestone() } })) { event in
@@ -814,9 +822,51 @@ struct TodayView: View {
                 }
             }
             statusChip
+            windDownHeaderRow
         }
         .padding(.horizontal, 4)
         .padding(.top, 4)
+    }
+
+    // MARK: - Wind-down (focus set last night + tonight's entry point)
+
+    /// Last night's focus for today, and — once the evening starts — the way into the ritual.
+    @ViewBuilder private var windDownHeaderRow: some View {
+        let focus = store.draft.mainFocus
+        if store.isToday && (!focus.isEmpty || store.isWindDownTime) {
+            HStack(spacing: 6) {
+                if !focus.isEmpty { focusChip(focus) }
+                if store.isWindDownTime { windDownChip }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func focusChip(_ focus: String) -> some View {
+        let done = store.draft.mainFocusDone
+        return Button { store.toggleMainFocusDone() } label: {
+            HStack(spacing: 5) {
+                Image(systemName: done ? "checkmark.circle.fill" : "target").font(.system(size: 10))
+                Text(focus).font(.system(size: 11, weight: .semibold)).lineLimit(1)
+            }
+            .foregroundStyle(done ? .white : Theme.accentDark)
+            .padding(.horizontal, 9).padding(.vertical, 4)
+            .background(Capsule().fill(done ? Theme.sage : Theme.accent.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var windDownChip: some View {
+        Button { showWindDown = true } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "moon.zzz.fill").font(.system(size: 10))
+                Text("Wind down").font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 9).padding(.vertical, 4)
+            .background(Capsule().fill(Theme.accentDark))
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder private var statusChip: some View {

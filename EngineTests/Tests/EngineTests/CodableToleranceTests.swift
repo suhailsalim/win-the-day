@@ -82,6 +82,8 @@ final class CodableToleranceTests: XCTestCase {
         e.eatingScore = 78
         e.checkIn = filledCheckIn()
         e.status = "travel"
+        e.mainFocus = "finish the physiology deck"
+        e.mainFocusDone = true
         return e
     }
 
@@ -183,6 +185,7 @@ final class CodableToleranceTests: XCTestCase {
         s.appLockEnabled = true; s.appLockGraceMinutes = 15
         s.smartReminders = false; s.smartStreakRule = false; s.smartDinnerRule = false
         s.smartBedtimeRule = false; s.smartProteinRule = false; s.smartEveningHour = 22
+        s.windDownEnabled = false; s.windDownHour = 21
         try roundTrip(s)
 
         var t = Targets()
@@ -538,6 +541,27 @@ final class CodableToleranceTests: XCTestCase {
         XCTAssertEqual(try decode(AppSettings.self, #"{"smartEveningHour":3}"#).smartEveningHour, 16)
         // Settings saved before the smart-reminder fields existed still opt in by default.
         XCTAssertTrue(try decode(AppSettings.self, #"{"provider":"openai"}"#).smartReminders)
+    }
+
+    func testWindDownHourIsClampedAndDefaultsToAuto() throws {
+        // Settings written before the wind-down existed: on, and on "auto" (bedtime - 45 min).
+        let old = try decode(AppSettings.self, #"{"provider":"openai"}"#)
+        XCTAssertTrue(old.windDownEnabled)
+        XCTAssertEqual(old.windDownHour, -1)
+        XCTAssertEqual(try decode(AppSettings.self, #"{"windDownHour":21}"#).windDownHour, 21)
+        XCTAssertEqual(try decode(AppSettings.self, #"{"windDownHour":99}"#).windDownHour, 23)
+        XCTAssertEqual(try decode(AppSettings.self, #"{"windDownHour":-9}"#).windDownHour, -1)
+    }
+
+    /// A tomorrow-entry whose only content is the focus set the night before must count as worth
+    /// saving, or `AppStore.commit()` drops it before the chip is ever shown.
+    func testEntryWithOnlyAMainFocusIsMeaningful() throws {
+        var e = Entry(date: "2026-03-05")
+        XCTAssertFalse(e.isMeaningful)
+        e.mainFocus = "one hard thing"
+        XCTAssertTrue(e.isMeaningful)
+        e.mainFocus = "   "
+        XCTAssertFalse(e.isMeaningful)
     }
 
     func testModulePrefsOrderDropsUnknownKeysAndAppendsNewOnes() throws {

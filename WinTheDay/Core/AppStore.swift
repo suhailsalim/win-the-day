@@ -2274,7 +2274,7 @@ final class AppStore: ObservableObject {
         s.enabled = settings.smartReminders
         s.streakRule = settings.smartStreakRule
         s.dinnerRule = settings.smartDinnerRule
-        s.bedtimeRule = settings.smartBedtimeRule
+        s.bedtimeRule = settings.smartBedtimeRule && !settings.windDownEnabled   // wind-down replaces it
         s.proteinRule = settings.smartProteinRule
         s.eveningHour = settings.smartEveningHour
         s.dayStatus = effectiveStatus(for: todayKey)
@@ -2328,6 +2328,119 @@ final class AppStore: ObservableObject {
     /// Settings-screen entry point: change a smart-reminder flag and reschedule right away.
     func updateSmartReminders(_ change: (inout AppSettings) -> Void) {
         updateSettings(change)
+        refreshSmartReminders(force: true)
+    }
+
+    // MARK: - Evening wind-down (see Today/WindDownView.swift)
+
+    /// Id prefix for everything the wind-down schedules (AGENTS.md convention 6). Deliberately its
+    /// own prefix: `smart-` belongs to `ReminderEngine` and is cleared wholesale on every recompute.
+    static let windDownIDPrefix = "winddown-"
+
+    private var lastWindDownSync: Date?
+
+    /// The day the user is about to wake into — the day a wind-down is *planning*. Run at 22:00 that
+    /// is tomorrow; run at 01:30, past midnight but still the same night, it is today's own date.
+    /// The 4am cut-off matches `ReminderEngine`'s tonight-horizon.
+    var windDownTargetDate: String {
+        let now = Date()
+        if Calendar.current.component(.hour, from: now) < 4 { return Self.dateString(now) }
+        let next = Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now
+        return Self.dateString(next)
+    }
+
+    /// Evening enough to offer the ritual (and to keep the header chip honest after midnight).
+    var isWindDownTime: Bool {
+        let h = Calendar.current.component(.hour, from: Date())
+        return h >= 19 || h < 4
+    }
+
+    /// The focus stored on any day (empty when none) — a plain lookup, no entry is created.
+    func mainFocus(for dayKey: String) -> String {
+        (dayKey == draft.date ? draft : data.entries[dayKey])?.mainFocus ?? ""
+    }
+
+    /// Write tomorrow's one focus. A day that has no entry yet is created through exactly the same
+    /// path the date navigator uses (`loadDraft`), so tomorrow morning's load finds this entry
+    /// rather than replacing it with a blank one.
+    func setMainFocus(_ text: String, for dayKey: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if dayKey == draft.date {
+            mutate { e in
+                e.mainFocus = trimmed
+                if trimmed.isEmpty { e.mainFocusDone = false }
+            }
+            return
+        }
+        var e = loadDraft(for: dayKey)
+        e.mainFocus = trimmed
+        if trimmed.isEmpty { e.mainFocusDone = false }
+        if e.isMeaningful { data.entries[dayKey] = e } else { data.entries.removeValue(forKey: dayKey) }
+        persistData()
+    }
+
+    /// Tick today's focus off (display-only for now — it satisfies no habit).
+    func toggleMainFocusDone() {
+        guard !draft.mainFocus.isEmpty else { return }
+        mutate { $0.mainFocusDone.toggle() }
+    }
+
+    /// When tonight's wind-down should fire: the user's fixed hour if they set one, otherwise 45
+    /// minutes before the recommended bedtime. `nil` = nothing to schedule (off, no sleep plan yet,
+    /// or the moment has already passed — tonight is then simply left alone).
+    var windDownFireDate: Date? {
+        guard settings.windDownEnabled else { return nil }
+        let now = Date()
+        let fire: Date
+        if settings.windDownHour >= 0 {
+            var comps = Calendar.current.dateComponents([.year, .month, .day], from: now)
+            comps.hour = min(23, settings.windDownHour)
+            comps.minute = 0
+            guard let d = Calendar.current.date(from: comps) else { return nil }
+            fire = d
+        } else {
+            guard let bed = sleepPlanTonight?.recommendedBedEpoch, bed > 0 else { return nil }
+            fire = Date(timeIntervalSince1970: bed).addingTimeInterval(-45 * 60)
+        }
+        return fire > now ? fire : nil
+    }
+
+    /// Clear the whole `winddown-` prefix, then add tonight's single request. The id carries the
+    /// fire date's day, so the flow can never nag twice in one night and yesterday's leftover is
+    /// obvious. Silent no-op when notifications were never granted — this never re-prompts.
+    func refreshWindDown(force: Bool = false) {
+        if !force, let last = lastWindDownSync, Date().timeIntervalSince(last) < 60 { return }
+        lastWindDownSync = Date()
+        let prefix = Self.windDownIDPrefix
+        let fire = windDownFireDate
+        let identifier = fire.map { prefix + Self.dateString($0) }
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { note in
+            let granted = note.authorizationStatus == .authorized || note.authorizationStatus == .provisional
+            guard granted else { return }
+            center.getPendingNotificationRequests { reqs in
+                let ours = reqs.filter { $0.identifier.hasPrefix(prefix) }.map { $0.identifier }
+                center.removePendingNotificationRequests(withIdentifiers: ours)
+                guard let fire, let identifier else { return }
+                let content = UNMutableNotificationContent()
+                content.title = "Wind down"
+                content.body = "Two minutes: close today, then name tomorrow\u{2019}s one thing."
+                content.sound = .default
+                let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+                let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+                center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
+                #if DEBUG
+                print("[wind-down] \(identifier)")
+                #endif
+            }
+        }
+    }
+
+    /// Settings-screen entry point: change a wind-down setting and reschedule both concerns right
+    /// away (the bedtime nudge is switched off while the wind-down is on).
+    func updateWindDown(_ change: (inout AppSettings) -> Void) {
+        updateSettings(change)
+        refreshWindDown(force: true)
         refreshSmartReminders(force: true)
     }
 
