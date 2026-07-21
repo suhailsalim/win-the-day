@@ -231,6 +231,142 @@ final class CodableToleranceTests: XCTestCase {
         XCTAssertEqual(back.rings, original.rings)
     }
 
+    // MARK: - Types reachable from AppData as whole arrays
+    //
+    // `AppData.init(from:)` decodes each of these as an entire collection —
+    // `(try? c.decode([HabitDef].self, forKey: .habits)) ?? []`. So a single element that fails to
+    // decode doesn't degrade to a partial habit; it takes the **whole list** with it. That makes a
+    // missing tolerant-decode line here a total-loss bug, not a one-field bug, which is why each of
+    // these gets both a fully-populated round-trip and an empty-object check.
+
+    func testMealsAndNonNegotiablesRoundTripAndDefault() throws {
+        try roundTrip(Meals(breakfast: "idli", snacks: "dates", lunch: "biryani",
+                            dinner: "grilled fish", drinks: "black coffee"))
+        XCTAssertEqual(try decodeEmpty(Meals.self), Meals())
+
+        try roundTrip(NonNegotiables(fajr: true, protein: true, moved: true, phone: true, side: true))
+        XCTAssertEqual(try decodeEmpty(NonNegotiables.self), NonNegotiables())
+    }
+
+    func testHabitDefRoundTripAndDefaults() throws {
+        try roundTrip(HabitDef(id: "h-1", title: "Walk 10k", pillar: .health, link: .steps,
+                               prayerName: "isha", prayerNames: ["fajr", "maghrib"], threshold: 10_000,
+                               active: false, order: 6))
+        let h = try decodeEmpty(HabitDef.self)
+        XCTAssertEqual(h.title, "")
+        XCTAssertEqual(h.pillar, .custom)
+        XCTAssertEqual(h.link, .manual)
+        XCTAssertEqual(h.prayerName, "fajr")
+        XCTAssertTrue(h.prayerNames.isEmpty)
+        XCTAssertEqual(h.threshold, 0)
+        XCTAssertTrue(h.active)
+        XCTAssertEqual(h.order, 0)
+        XCTAssertFalse(h.id.isEmpty, "a missing id must get a fresh UUID, not an empty string")
+    }
+
+    func testSubjectAndCountdownRoundTripAndDefaults() throws {
+        try roundTrip(Subject(id: "s-1", name: "biochemistry", done: true))
+        let s = try decodeEmpty(Subject.self)
+        XCTAssertEqual(s.name, "")
+        XCTAssertFalse(s.done)
+        XCTAssertFalse(s.id.isEmpty)
+
+        try roundTrip(Countdown(id: "c-1", name: "viva", dateEpoch: 1_795_000_000, kind: "work"))
+        let c = try decodeEmpty(Countdown.self)
+        XCTAssertEqual(c.name, "")
+        XCTAssertEqual(c.dateEpoch, 0)
+        XCTAssertEqual(c.kind, "study")
+        XCTAssertFalse(c.id.isEmpty)
+    }
+
+    func testBodyCompRoundTripAndDefaults() throws {
+        try roundTrip(BodyComp(id: "bc-1", date: "2026-04-02", weight: 81.9, bodyFat: 19.4,
+                               leanMass: 66.0, skeletalMuscle: 37.2, bmi: 25.8, visceralFat: 9))
+        let b = try decodeEmpty(BodyComp.self)
+        XCTAssertEqual(b.date, "")
+        XCTAssertNil(b.weight)
+        XCTAssertNil(b.bodyFat)
+        XCTAssertNil(b.leanMass)
+        XCTAssertNil(b.skeletalMuscle)
+        XCTAssertNil(b.bmi)
+        XCTAssertNil(b.visceralFat)
+        XCTAssertFalse(b.id.isEmpty)
+    }
+
+    func testLabItemAndLabRecordRoundTripAndDefaults() throws {
+        let item = LabItem(id: "li-1", name: "Ferritin", value: 88.5, unit: "ng/mL", written: true)
+        try roundTrip(item)
+        try roundTrip(LabRecord(id: "lr-1", date: "2026-04-02", title: "Full panel", items: [item]))
+
+        let i = try decodeEmpty(LabItem.self)
+        XCTAssertEqual(i.name, "")
+        XCTAssertEqual(i.value, 0)
+        XCTAssertEqual(i.unit, "")
+        XCTAssertFalse(i.written)
+        XCTAssertFalse(i.id.isEmpty)
+
+        let r = try decodeEmpty(LabRecord.self)
+        XCTAssertEqual(r.date, "")
+        XCTAssertEqual(r.title, "")
+        XCTAssertTrue(r.items.isEmpty)
+        XCTAssertFalse(r.id.isEmpty)
+    }
+
+    func testHealthKitFlagsRoundTripAndKeepTheirOptInDefaults() throws {
+        try roundTrip(HKReadFlags(weight: false, steps: false, energy: false, workouts: false, sleep: true))
+        try roundTrip(HKWriteFlags(calories: false, protein: false))
+        // Defaults are deliberately asymmetric — everything on except sleep — so `{}` must not
+        // collapse them all to `false`.
+        XCTAssertEqual(try decodeEmpty(HKReadFlags.self), HKReadFlags())
+        XCTAssertEqual(try decodeEmpty(HKWriteFlags.self), HKWriteFlags())
+        let read = try decodeEmpty(HKReadFlags.self)
+        XCTAssertTrue(read.weight && read.steps && read.energy && read.workouts)
+        XCTAssertFalse(read.sleep)
+        let write = try decodeEmpty(HKWriteFlags.self)
+        XCTAssertTrue(write.calories && write.protein)
+    }
+
+    /// The actual regression this convention exists to prevent: JSON written by an older build (no
+    /// `threshold`/`prayerNames`/`done`/`kind`/`written` keys) must still decode the **whole array**.
+    /// With synthesized Codable a single missing key throws, `try?` yields nil, and the user loses
+    /// every habit / subject / countdown / lab they ever recorded.
+    func testLegacyAppDataArraysSurviveMissingNewerKeys() throws {
+        let legacy = """
+        {"habits":[{"id":"fajr","title":"Prayed Fajr","pillar":"spirituality","link":"prayer"},
+                   {"id":"protein","title":"Hit protein target","pillar":"health","link":"protein"}],
+         "subjects":[{"id":"s1","name":"anatomy"}],
+         "countdowns":[{"id":"c1","name":"finals","dateEpoch":1790000000}],
+         "bodyComps":[{"id":"b1","date":"2026-01-01","weight":84.2}],
+         "labs":[{"id":"l1","date":"2026-01-02","title":"lipids",
+                  "items":[{"id":"i1","name":"LDL","value":110,"unit":"mg/dL"}]}]}
+        """
+        let d = try decode(AppData.self, legacy)
+        XCTAssertEqual(d.habits.count, 2, "one habit missing a newer key must not wipe the whole list")
+        XCTAssertEqual(d.habits.first?.title, "Prayed Fajr")
+        XCTAssertEqual(d.habits.first?.threshold, 0)
+        XCTAssertTrue(try XCTUnwrap(d.habits.first).prayerNames.isEmpty)
+        XCTAssertTrue(try XCTUnwrap(d.habits.first).active)
+        XCTAssertEqual(d.subjects.count, 1)
+        XCTAssertEqual(d.subjects.first?.name, "anatomy")
+        XCTAssertEqual(d.subjects.first?.done, false)
+        XCTAssertEqual(d.countdowns.count, 1)
+        XCTAssertEqual(d.countdowns.first?.kind, "study")
+        XCTAssertEqual(d.bodyComps.count, 1)
+        XCTAssertEqual(d.bodyComps.first?.weight, 84.2)
+        XCTAssertNil(d.bodyComps.first?.bodyFat)
+        XCTAssertEqual(d.labs.first?.items.count, 1)
+        XCTAssertEqual(d.labs.first?.items.first?.written, false)
+    }
+
+    /// Legacy `AppSettings` JSON predating `hkRead`/`hkWrite` sub-keys keeps the on-by-default flags.
+    func testLegacySettingsKeepHealthKitDefaults() throws {
+        let s = try decode(AppSettings.self, #"{"provider":"openai","hkRead":{"sleep":true}}"#)
+        XCTAssertEqual(s.provider, "openai")
+        XCTAssertTrue(s.hkRead.weight, "an absent sub-key must keep its default, not flip to false")
+        XCTAssertTrue(s.hkRead.sleep)
+        XCTAssertEqual(s.hkWrite, HKWriteFlags())
+    }
+
     // MARK: - Empty-object tolerance (old data written before a field existed)
 
     func testEveryPersistedStructDecodesFromAnEmptyObject() throws {
@@ -265,6 +401,16 @@ final class CodableToleranceTests: XCTestCase {
         XCTAssertEqual(try decodeEmpty(ScheduledSession.self).remindMin, 60)
         XCTAssertEqual(try decodeEmpty(ChatMessage.self).role, "assistant")
         XCTAssertEqual(try decodeEmpty(CoachThread.self).title, "New chat")
+        XCTAssertEqual(try decodeEmpty(Meals.self), Meals())
+        XCTAssertEqual(try decodeEmpty(NonNegotiables.self), NonNegotiables())
+        XCTAssertEqual(try decodeEmpty(HKReadFlags.self), HKReadFlags())
+        XCTAssertEqual(try decodeEmpty(HKWriteFlags.self), HKWriteFlags())
+        XCTAssertEqual(try decodeEmpty(HabitDef.self).prayerName, "fajr")
+        XCTAssertEqual(try decodeEmpty(Subject.self).name, "")
+        XCTAssertEqual(try decodeEmpty(Countdown.self).kind, "study")
+        XCTAssertEqual(try decodeEmpty(BodyComp.self).date, "")
+        XCTAssertEqual(try decodeEmpty(LabItem.self).value, 0)
+        XCTAssertTrue(try decodeEmpty(LabRecord.self).items.isEmpty)
     }
 
     /// A build that shipped before `foodEntries`/`rings`/`checkIn` existed wrote JSON without them —

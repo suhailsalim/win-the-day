@@ -9,6 +9,20 @@ struct Meals: Codable, Equatable {
     var dinner = ""
     var drinks = ""
 
+    init(breakfast: String = "", snacks: String = "", lunch: String = "",
+         dinner: String = "", drinks: String = "") {
+        self.breakfast = breakfast; self.snacks = snacks; self.lunch = lunch
+        self.dinner = dinner; self.drinks = drinks
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        breakfast = (try? c.decode(String.self, forKey: .breakfast)) ?? ""
+        snacks = (try? c.decode(String.self, forKey: .snacks)) ?? ""
+        lunch = (try? c.decode(String.self, forKey: .lunch)) ?? ""
+        dinner = (try? c.decode(String.self, forKey: .dinner)) ?? ""
+        drinks = (try? c.decode(String.self, forKey: .drinks)) ?? ""
+    }
+
     var all: [String] { [breakfast, snacks, lunch, dinner, drinks] }
     var hasAny: Bool { all.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty } }
 }
@@ -19,6 +33,20 @@ struct NonNegotiables: Codable, Equatable {
     var moved = false
     var phone = false
     var side = false
+
+    init(fajr: Bool = false, protein: Bool = false, moved: Bool = false,
+         phone: Bool = false, side: Bool = false) {
+        self.fajr = fajr; self.protein = protein; self.moved = moved
+        self.phone = phone; self.side = side
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        fajr = (try? c.decode(Bool.self, forKey: .fajr)) ?? false
+        protein = (try? c.decode(Bool.self, forKey: .protein)) ?? false
+        moved = (try? c.decode(Bool.self, forKey: .moved)) ?? false
+        phone = (try? c.decode(Bool.self, forKey: .phone)) ?? false
+        side = (try? c.decode(Bool.self, forKey: .side)) ?? false
+    }
 
     var anyTrue: Bool { fajr || protein || moved || phone || side }
 }
@@ -389,6 +417,26 @@ struct HabitDef: Codable, Identifiable, Equatable {
     var active: Bool = true
     var order: Int = 0
 
+    init(id: String = UUID().uuidString, title: String, pillar: Pillar = .custom,
+         link: HabitLinkType = .manual, prayerName: String = "fajr", prayerNames: [String] = [],
+         threshold: Double = 0, active: Bool = true, order: Int = 0) {
+        self.id = id; self.title = title; self.pillar = pillar; self.link = link
+        self.prayerName = prayerName; self.prayerNames = prayerNames
+        self.threshold = threshold; self.active = active; self.order = order
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        title = (try? c.decode(String.self, forKey: .title)) ?? ""
+        pillar = (try? c.decode(Pillar.self, forKey: .pillar)) ?? .custom
+        link = (try? c.decode(HabitLinkType.self, forKey: .link)) ?? .manual
+        prayerName = (try? c.decode(String.self, forKey: .prayerName)) ?? "fajr"
+        prayerNames = (try? c.decode([String].self, forKey: .prayerNames)) ?? []
+        threshold = (try? c.decode(Double.self, forKey: .threshold)) ?? 0
+        active = (try? c.decode(Bool.self, forKey: .active)) ?? true
+        order = (try? c.decode(Int.self, forKey: .order)) ?? 0
+    }
+
     /// The prayers this goal actually requires — falls back to the legacy single `prayerName`
     /// for habits saved before multi-prayer goals existed.
     var effectivePrayerNames: [String] { prayerNames.isEmpty ? [prayerName] : prayerNames }
@@ -404,6 +452,16 @@ struct Subject: Codable, Identifiable, Equatable {
     var id = UUID().uuidString
     var name: String
     var done: Bool = false
+
+    init(id: String = UUID().uuidString, name: String, done: Bool = false) {
+        self.id = id; self.name = name; self.done = done
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        done = (try? c.decode(Bool.self, forKey: .done)) ?? false
+    }
 }
 
 // MARK: - Strength / workout logging
@@ -482,6 +540,18 @@ struct Countdown: Codable, Identifiable, Equatable {
     var name: String
     var dateEpoch: Double
     var kind: String = "study"   // "study" or "work" (icon only)
+
+    init(id: String = UUID().uuidString, name: String, dateEpoch: Double, kind: String = "study") {
+        self.id = id; self.name = name; self.dateEpoch = dateEpoch; self.kind = kind
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        dateEpoch = (try? c.decode(Double.self, forKey: .dateEpoch)) ?? 0
+        kind = (try? c.decode(String.self, forKey: .kind)) ?? "study"
+    }
+
     var date: Date { Date(timeIntervalSince1970: dateEpoch) }
 }
 
@@ -699,6 +769,25 @@ struct BodyComp: Codable, Identifiable, Equatable {
     var skeletalMuscle: Double?  // kg
     var bmi: Double?
     var visceralFat: Double?     // level (kept in-app; Health has no type for it)
+
+    init(id: String = UUID().uuidString, date: String, weight: Double? = nil, bodyFat: Double? = nil,
+         leanMass: Double? = nil, skeletalMuscle: Double? = nil, bmi: Double? = nil,
+         visceralFat: Double? = nil) {
+        self.id = id; self.date = date; self.weight = weight; self.bodyFat = bodyFat
+        self.leanMass = leanMass; self.skeletalMuscle = skeletalMuscle
+        self.bmi = bmi; self.visceralFat = visceralFat
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        date = (try? c.decode(String.self, forKey: .date)) ?? ""
+        weight = try? c.decodeIfPresent(Double.self, forKey: .weight)
+        bodyFat = try? c.decodeIfPresent(Double.self, forKey: .bodyFat)
+        leanMass = try? c.decodeIfPresent(Double.self, forKey: .leanMass)
+        skeletalMuscle = try? c.decodeIfPresent(Double.self, forKey: .skeletalMuscle)
+        bmi = try? c.decodeIfPresent(Double.self, forKey: .bmi)
+        visceralFat = try? c.decodeIfPresent(Double.self, forKey: .visceralFat)
+    }
 }
 
 struct LabItem: Codable, Equatable, Identifiable {
@@ -707,6 +796,18 @@ struct LabItem: Codable, Equatable, Identifiable {
     var value: Double
     var unit: String
     var written: Bool = false    // whether it was saved to Apple Health
+
+    init(id: String = UUID().uuidString, name: String, value: Double, unit: String, written: Bool = false) {
+        self.id = id; self.name = name; self.value = value; self.unit = unit; self.written = written
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        value = (try? c.decode(Double.self, forKey: .value)) ?? 0
+        unit = (try? c.decode(String.self, forKey: .unit)) ?? ""
+        written = (try? c.decode(Bool.self, forKey: .written)) ?? false
+    }
 }
 
 struct LabRecord: Codable, Identifiable, Equatable {
@@ -714,6 +815,17 @@ struct LabRecord: Codable, Identifiable, Equatable {
     var date: String
     var title: String
     var items: [LabItem]
+
+    init(id: String = UUID().uuidString, date: String, title: String, items: [LabItem]) {
+        self.id = id; self.date = date; self.title = title; self.items = items
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        date = (try? c.decode(String.self, forKey: .date)) ?? ""
+        title = (try? c.decode(String.self, forKey: .title)) ?? ""
+        items = (try? c.decode([LabItem].self, forKey: .items)) ?? []
+    }
 }
 
 /// A day's status — "protected" statuses pause expectations & the streak.
@@ -1123,11 +1235,34 @@ struct HKReadFlags: Codable, Equatable {
     var energy = true
     var workouts = true
     var sleep = false
+
+    init(weight: Bool = true, steps: Bool = true, energy: Bool = true,
+         workouts: Bool = true, sleep: Bool = false) {
+        self.weight = weight; self.steps = steps; self.energy = energy
+        self.workouts = workouts; self.sleep = sleep
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        weight = (try? c.decode(Bool.self, forKey: .weight)) ?? true
+        steps = (try? c.decode(Bool.self, forKey: .steps)) ?? true
+        energy = (try? c.decode(Bool.self, forKey: .energy)) ?? true
+        workouts = (try? c.decode(Bool.self, forKey: .workouts)) ?? true
+        sleep = (try? c.decode(Bool.self, forKey: .sleep)) ?? false
+    }
 }
 
 struct HKWriteFlags: Codable, Equatable {
     var calories = true
     var protein = true
+
+    init(calories: Bool = true, protein: Bool = true) {
+        self.calories = calories; self.protein = protein
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        calories = (try? c.decode(Bool.self, forKey: .calories)) ?? true
+        protein = (try? c.decode(Bool.self, forKey: .protein)) ?? true
+    }
 }
 
 /// User-configurable daily targets (drive rings, labels, chart goal lines & scoring).
