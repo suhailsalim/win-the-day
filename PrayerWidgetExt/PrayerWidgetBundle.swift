@@ -15,6 +15,7 @@ struct PrayerWidgetBundle: WidgetBundle {
         WeatherWidget()
         NextSessionWidget()
         UpcomingEventWidget()
+        HydrationWidget()
         LockNonNegotiablesWidget()
         LockNextPrayerWidget()
         LockSummaryWidget()

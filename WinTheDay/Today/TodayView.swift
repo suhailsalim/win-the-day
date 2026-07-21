@@ -73,6 +73,14 @@ struct TodayView: View {
             MilestoneCelebrationSheet(event: event)
         }
         .fullScreenCover(isPresented: $showFocus) { FocusScreenView() }
+        // "Start a focus session" (Siri/Shortcuts) opens the app; the store raises this once it's
+        // reconciled, so the cover opens whether the app cold-launched or was already running.
+        .onChange(of: store.pendingFocusOpen) { _, open in
+            if open { showFocus = true; store.pendingFocusOpen = false }
+        }
+        // …and once on appear, for the cold launch where the flag is already up by the time
+        // this view starts observing it.
+        .task { if store.pendingFocusOpen { showFocus = true; store.pendingFocusOpen = false } }
         .task { await store.refreshSuggestion() }
         .task { prayer.start() }
         .task { weather.start(); store.weatherContext = weather.plannerSummary }
