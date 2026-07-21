@@ -16,7 +16,20 @@ struct PrayerTimes {
             case .isha: return "Isha"
             }
         }
+        /// On Friday the congregational prayer replaces Dhuhr for those it is obligatory on, so the
+        /// slot is *named* differently. Nothing else changes: it occupies the same window and is
+        /// still recorded under the `dhuhr` key, so history, streaks and scoring are untouched.
+        func label(jumuah: Bool) -> String {
+            (jumuah && self == .dhuhr) ? "Jumu'ah" : label
+        }
+
         var isPrayer: Bool { self != .sunrise }
+    }
+
+    /// Is `date` a Friday? Takes the calendar so a caller with a fixed time zone (the notification
+    /// scheduler builds one) agrees with what the user sees on screen.
+    static func isFriday(_ date: Date, calendar: Calendar = .current) -> Bool {
+        calendar.component(.weekday, from: date) == 6   // Gregorian: 1 = Sunday … 6 = Friday
     }
 
     let times: [Name: Date]

@@ -482,6 +482,47 @@ struct SettingsView: View {
         .padding(.horizontal, 16).padding(.vertical, 13)
     }
 
+    // MARK: - Friday Jumu'ah
+
+    private var jumuahModeLabel: String {
+        switch prayer.jumuahMode {
+        case "on": return "Always"
+        case "off": return "Never"
+        default: return prayer.userIsMale ? "Automatic · shown" : "Automatic · hidden"
+        }
+    }
+
+    /// The congregation time is set by the mosque, not by astronomy, so it can only be entered.
+    /// Unset means "follow the computed Dhuhr", which is when the Jumu'ah window opens.
+    @ViewBuilder private var jumuahTimeRow: some View {
+        let base = Calendar.current.startOfDay(for: Date())
+        let current = prayer.jumuahMinute >= 0
+            ? base.addingTimeInterval(Double(prayer.jumuahMinute) * 60)
+            : (prayer.today?[.dhuhr] ?? base.addingTimeInterval(13 * 3600))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Jumu'ah time").font(.system(size: 16)).foregroundStyle(Theme.ink)
+                Spacer()
+                if prayer.jumuahMinute >= 0 {
+                    Button("Clear") { prayer.setJumuahMinute(-1) }
+                        .font(.system(size: 13)).foregroundStyle(Theme.accentDark)
+                }
+                DatePicker("", selection: Binding(
+                    get: { current },
+                    set: { d in
+                        let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+                        prayer.setJumuahMinute((c.hour ?? 13) * 60 + (c.minute ?? 0))
+                    }), displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+            }
+            Text(prayer.jumuahMinute >= 0
+                 ? "Your mosque's khutbah time."
+                 : "Following the computed Dhuhr — set your mosque's time if it differs.")
+                .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 11)
+    }
+
     // MARK: - Smart reminders (rule-based nudges — ReminderEngine)
 
     private var smartRemindersCard: some View {
@@ -791,6 +832,15 @@ struct SettingsView: View {
                 } label: {
                     pickerLabel("School", prayer.branch == "shia" ? "Shia (Jafari)" : "Sunni")
                 }
+                Hairline()
+                Menu {
+                    Button("Automatic") { prayer.setJumuahMode("auto") }
+                    Button("Always") { prayer.setJumuahMode("on") }
+                    Button("Never") { prayer.setJumuahMode("off") }
+                } label: {
+                    pickerLabel("Friday Jumu'ah", jumuahModeLabel)
+                }
+                if prayer.observesJumuah { Hairline(); jumuahTimeRow }
                 if prayer.branch == "sunni" {
                     Hairline()
                     Menu {

@@ -13,6 +13,9 @@ struct SnapshotRing: Codable {
 struct SharedSnapshot: Codable {
     var nextPrayerName: String = "—"
     var nextPrayerEpoch: Double = 0          // time of next prayer
+    /// True on Fridays for a user who observes Jumu'ah, so widgets and the watch label the Dhuhr
+    /// slot the way the app does. The stored record key stays "dhuhr" everywhere.
+    var jumuahToday: Bool = false
     var placeName: String = ""
     var nnDone: Int = 0
     var nnTotal: Int = 5
