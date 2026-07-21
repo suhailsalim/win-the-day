@@ -107,6 +107,10 @@ struct Entry: Codable, Equatable, Identifiable {
     var eatingScore: Int?            // 0–100 eating score (cached); nil = not enough data to compute
     var checkIn = DayCheckIn()       // optional self-report that sharpens Readiness
     var status: String = "normal"    // normal | sick | travel | rest (protected days)
+    // Evening wind-down (see Today/WindDownView.swift): the one thing that matters on this day,
+    // written the night before onto the day it belongs to — so a morning read is a plain lookup.
+    var mainFocus = ""
+    var mainFocusDone = false
 
     var id: String { date }
 
@@ -146,6 +150,8 @@ struct Entry: Codable, Equatable, Identifiable {
         eatingScore = try? c.decodeIfPresent(Int.self, forKey: .eatingScore)
         checkIn = (try? c.decode(DayCheckIn.self, forKey: .checkIn)) ?? DayCheckIn()
         status = (try? c.decode(String.self, forKey: .status)) ?? "normal"
+        mainFocus = (try? c.decode(String.self, forKey: .mainFocus)) ?? ""
+        mainFocusDone = (try? c.decode(Bool.self, forKey: .mainFocusDone)) ?? false
         // Migrate legacy non-negotiables into the new manual-habit state.
         if habitState.isEmpty {
             if nn.moved { habitState["moved"] = true }
@@ -159,6 +165,9 @@ struct Entry: Codable, Equatable, Identifiable {
         if meals.hasAny { return true }
         if nn.anyTrue { return true }
         if status != "normal" { return true }
+        // A focus set the night before is the whole content of tomorrow's entry — without this the
+        // first `commit()` of the new day would throw it away before the chip is ever seen.
+        if !mainFocus.trimmingCharacters(in: .whitespaces).isEmpty { return true }
         if !logged.isEmpty || !foodEntries.isEmpty || !photos.isEmpty || prayers.anyTrue || waterMl > 0 || !workouts.isEmpty { return true }
         return [training, run, weight, steps, sms, calories, proteinG]
             .contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -1227,6 +1236,11 @@ struct AppSettings: Codable, Equatable {
     var smartProteinRule = true
     var smartEveningHour = 20       // when the streak-at-risk nudge fires (16–23)
 
+    // Evening wind-down (see Today/WindDownView.swift). When on it replaces the plain bedtime
+    // nudge above, so the two never fire within minutes of each other.
+    var windDownEnabled = true
+    var windDownHour = -1           // -1 = auto (recommended bedtime − 45 min); 0–23 = fixed hour
+
     init() {}
 
     init(from decoder: Decoder) throws {
@@ -1252,6 +1266,9 @@ struct AppSettings: Codable, Equatable {
         smartProteinRule = (try? c.decode(Bool.self, forKey: .smartProteinRule)) ?? true
         let eveningHour = (try? c.decode(Int.self, forKey: .smartEveningHour)) ?? 20
         smartEveningHour = min(23, max(16, eveningHour))
+        windDownEnabled = (try? c.decode(Bool.self, forKey: .windDownEnabled)) ?? true
+        let windHour = (try? c.decode(Int.self, forKey: .windDownHour)) ?? -1
+        windDownHour = min(23, max(-1, windHour))
     }
 }
 
