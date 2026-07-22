@@ -47,11 +47,12 @@ struct WinTheDayApp: App {
                 .task { lock.start(enabled: store.settings.appLockEnabled) }
                 .task {
                     theme.start()
-                    theme.apply(mode: store.settings.theme, darkStyle: store.settings.dark)
+                    theme.apply(mode: store.settings.theme, darkStyle: store.settings.dark,
+                                palette: store.settings.palette)
                 }
                 // Settings edits and restored backups both land here.
                 .onChange(of: store.settings) { _, s in
-                    theme.apply(mode: s.theme, darkStyle: s.dark)
+                    theme.apply(mode: s.theme, darkStyle: s.dark, palette: s.palette)
                 }
                 // Cold launch: `.onChange(of: scenePhase)` isn't guaranteed to fire for the very
                 // first `.active`, and a Siri/widget write made before launch must not be lost.

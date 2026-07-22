@@ -4,7 +4,6 @@ struct RootView: View {
     @EnvironmentObject var store: AppStore
     @EnvironmentObject var health: HealthManager
     @EnvironmentObject var fasting: FastingManager
-    @State private var confirmReset = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -17,7 +16,7 @@ struct RootView: View {
                     case .plan:     PlanView()
                     case .trends:   TrendsView()
                     case .health:   HealthView()
-                    case .settings: SettingsView(confirmReset: $confirmReset)
+                    case .settings: SettingsView()
                     }
                 }
                 .padding(.horizontal, 16)
@@ -45,12 +44,6 @@ struct RootView: View {
                 Spacer()
                 Button("Done") { hideKeyboard() }
             }
-        }
-        .confirmationDialog("Reset all data?", isPresented: $confirmReset, titleVisibility: .visible) {
-            Button("Clear everything", role: .destructive) { store.reset() }
-            Button("Keep my data", role: .cancel) {}
-        } message: {
-            Text("This clears every entry on this device. Export a backup first if you\u{2019}re unsure.")
         }
         .task {
             if store.settings.healthkit { await health.requestAuthorization() }

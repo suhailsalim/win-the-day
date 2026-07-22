@@ -15,10 +15,12 @@ struct RingEditorView: View {
                         set: { store.setVisibleRingCount($0) })) {
                         Text("3").tag(3)
                         Text("4").tag(4)
+                        Text("5").tag(5)
+                        Text("6").tag(6)
                     }
                     .pickerStyle(.segmented)
                 } footer: {
-                    Text("All your rings are kept — this just picks how many show at once. Reorder below to choose which ones.")
+                    Text("All your rings are kept — this just picks how many show at once. 5 or 6 wrap onto a second row. Reorder below to choose which ones.")
                 }
                 Section {
                     ForEach(store.allRingsOrdered) { ring in
@@ -95,12 +97,14 @@ struct RingCreatorView: View {
                                     }
                                 }.labelsHidden().tint(Theme.accentDark)
                             }.padding(.horizontal, 16).padding(.vertical, 6)
-                            Hairline()
-                            HStack {
-                                Text(goalLabel).frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(Theme.ink)
-                                TextField("goal", value: $ring.goal, format: .number)
-                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 90)
-                            }.font(.system(size: 16)).padding(.horizontal, 16).padding(.vertical, 13)
+                            if ring.metric.usesGoal {
+                                Hairline()
+                                HStack {
+                                    Text(goalLabel).frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(Theme.ink)
+                                    TextField("goal", value: $ring.goal, format: .number)
+                                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 90)
+                                }.font(.system(size: 16)).padding(.horizontal, 16).padding(.vertical, 13)
+                            }
                             Hairline()
                             HStack {
                                 Text("Color").font(.system(size: 16)).foregroundStyle(Theme.ink)
@@ -152,9 +156,17 @@ struct RingCreatorView: View {
         case .hydrationPct: return "Goal (ml)"
         case .studyGoalPct: return "Goal (hours)"
         case .proteinPct: return "Goal (g)"
+        case .stepsPct: return "Goal (steps)"
+        case .caloriesPct: return "Budget (kcal)"
         default: return "Goal"
         }
     }
+}
+
+extension RingMetric {
+    /// Steps/calories/hydration etc. read their target straight from the app's daily targets, so
+    /// the per-ring goal field only shows where it actually does something.
+    var usesGoal: Bool { self != .habitsPct }
 }
 
 /// Big ring + caption for one ring, opened by tapping it on Today.
@@ -169,7 +181,7 @@ struct RingDetailView: View {
                 WarmBackground()
                 VStack(spacing: 18) {
                     RingGaugeView(fraction: result.fraction, value: result.displayValue, label: ring.displayTitle,
-                                 color: Theme.accentDark, available: result.available, size: 170, lineWidth: 14)
+                                 color: Theme.accentDark, available: result.available, size: 180, lineWidth: 22)
                         .padding(.top, 30)
                     Text(result.caption).font(.system(size: 15)).foregroundStyle(Theme.secondaryInk)
                     if !result.factors.isEmpty {

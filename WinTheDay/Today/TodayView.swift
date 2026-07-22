@@ -37,16 +37,23 @@ struct TodayView: View {
     var body: some View {
         VStack(spacing: 0) {
             dateHeader
-            tipCard
+            // The AI tips rotator (weather module) already rotates advice on a normal day — the
+            // static tip only fills in when that isn't on screen, so the page never opens with
+            // two advice cards stacked on top of each other.
+            if !(store.isToday && weather.now != nil && store.modules.enabled("weather")) {
+                tipCard
+            }
             ForEach(store.modules.orderedKeys, id: \.self) { key in
                 moduleView(key)
             }
 
-            Text(store.draft.isMeaningful ? "Saved automatically" : "Start logging — it saves as you go")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.quaternaryInk)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 14)
+            if !store.draft.isMeaningful {
+                Text("Start logging — it saves as you go")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.quaternaryInk)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 14)
+            }
         }
         .sheet(isPresented: $showCatalog) { CatalogView() }
         .sheet(isPresented: $showHistory) { HistoryView() }
@@ -242,32 +249,45 @@ struct TodayView: View {
         }
     }
 
-    // MARK: - Rings (adjustable Whoop-style ring row)
+    // MARK: - Rings (the hero card — thick Apple-style rings, 3–6 of them)
 
     @ViewBuilder private var ringsModule: some View {
-        HStack {
-            SectionHeader(text: "Rings", color: store.moduleColor("rings"))
-            Spacer()
-            Button { showRingEditor = true } label: {
-                Image(systemName: "slider.horizontal.3").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
-            }.padding(.top, 14)
-        }
-        HStack(spacing: 4) {
-            ForEach(store.visibleRings) { ring in
-                let result = store.ringResult(ring, prayerTimes: prayer.today, nextFajr: prayer.nextFajr)
-                Button { ringDetail = ring } label: {
-                    VStack(spacing: 6) {
-                        RingGaugeView(fraction: result.fraction, value: result.displayValue, label: ring.displayTitle,
-                                     color: ringColor(ring, result), available: result.available)
-                        Text(result.caption).font(.system(size: 10)).foregroundStyle(Theme.tertiaryInk).lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity)
-                }.buttonStyle(.plain)
+        let rings = store.visibleRings
+        if !rings.isEmpty {
+            SectionHeaderRow(text: "Rings", color: store.moduleColor("rings")) {
+                Button { showRingEditor = true } label: {
+                    Image(systemName: "slider.horizontal.3").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
+                }
             }
+            // ≤4 rings sit on one generous row; 5–6 wrap into a 3-column grid so every ring keeps
+            // its size instead of all of them shrinking to fit.
+            Group {
+                if rings.count <= 4 {
+                    HStack(spacing: rings.count == 3 ? 10 : 4) {
+                        ForEach(rings) { ringCell($0, size: rings.count == 3 ? 92 : 80) }
+                    }
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 16) {
+                        ForEach(rings) { ringCell($0, size: 88) }
+                    }
+                }
+            }
+            .padding(.vertical, 14)
+            .glassList(cornerRadius: 20)
+            .padding(.top, 14)
         }
-        .padding(.vertical, 10)
-        .glassList(cornerRadius: 20)
-        .padding(.top, 14)
+    }
+
+    private func ringCell(_ ring: RingDef, size: CGFloat) -> some View {
+        let result = store.ringResult(ring, prayerTimes: prayer.today, nextFajr: prayer.nextFajr)
+        return Button { ringDetail = ring } label: {
+            VStack(spacing: 7) {
+                RingGaugeView(fraction: result.fraction, value: result.displayValue, label: ring.displayTitle,
+                             color: ringColor(ring, result), available: result.available, size: size)
+                Text(result.caption).font(.system(size: 10.5)).foregroundStyle(Theme.tertiaryInk).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+        }.buttonStyle(.plain)
     }
 
     private func ringColor(_ def: RingDef, _ r: RingResult) -> Color {
@@ -280,14 +300,11 @@ struct TodayView: View {
     }
 
     @ViewBuilder private var mealsModule: some View {
-        HStack {
-            SectionHeader(text: "What you ate", color: store.moduleColor("meals"))
-            Spacer()
+        SectionHeaderRow(text: "What you ate", color: store.moduleColor("meals")) {
             if store.draft.isMeaningful {
                 Button { exportedText = ExportedText(text: store.exportDayText(store.draft.date)) } label: {
                     Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
                 }
-                .padding(.top, 22)
             }
         }
         foodLogCard
@@ -688,14 +705,11 @@ struct TodayView: View {
     }
 
     @ViewBuilder private var trainingModule: some View {
-        HStack {
-            SectionHeader(text: "Training & body", color: store.moduleColor("training"))
-            Spacer()
+        SectionHeaderRow(text: "Training & body", color: store.moduleColor("training")) {
             Button { showWorkout = true } label: {
                 Label("Log workout", systemImage: "plus")
                     .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
             }
-            .padding(.trailing, 8).padding(.top, 22)
         }
         fitnessCard
         workoutsList
@@ -830,12 +844,10 @@ struct TodayView: View {
         let history = regimenHistoryRows
         // Nothing scheduled and nothing recorded — non-users never see this module (like the fitness card).
         if !groups.isEmpty || !history.isEmpty {
-            HStack {
-                SectionHeader(text: "Meds & supplements", color: store.moduleColor("regimen"))
-                Spacer()
+            SectionHeaderRow(text: "Meds & supplements", color: store.moduleColor("regimen")) {
                 Button { showRegimens = true } label: {
                     Text("Edit").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
-                }.padding(.trailing, 8).padding(.top, 22)
+                }
             }
             VStack(spacing: 0) {
                 ForEach(Array(groups.enumerated()), id: \.element.slot) { gIdx, group in
@@ -1160,13 +1172,10 @@ struct TodayView: View {
     // MARK: - Quick log (catalog items)
 
     @ViewBuilder private var quickLog: some View {
-        HStack {
-            SectionHeader(text: "Quick log", color: store.moduleColor("quickLog"))
-            Spacer()
+        SectionHeaderRow(text: "Quick log", color: store.moduleColor("quickLog")) {
             Button { showCatalog = true } label: {
                 Text("Library").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
             }
-            .padding(.trailing, 8).padding(.top, 22)
         }
 
         let allSupps = store.items(of: .supplement)
@@ -1536,12 +1545,10 @@ struct TodayView: View {
     // MARK: - Habits (configurable, grouped by pillar)
 
     @ViewBuilder private var habitsSection: some View {
-        HStack {
-            SectionHeader(text: "Your non-negotiables", color: store.moduleColor("habits"))
-            Spacer()
+        SectionHeaderRow(text: "Your non-negotiables", color: store.moduleColor("habits")) {
             Button { showHabits = true } label: {
                 Text("Edit").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
-            }.padding(.trailing, 8).padding(.top, 22)
+            }
         }
         ForEach(store.usedPillars) { pillar in
             let items = store.habits(in: pillar)
@@ -1622,15 +1629,13 @@ struct TodayView: View {
     @ViewBuilder private var studySection: some View {
         if showStudySection {
             let vocab = store.workVocab
-            HStack {
-                SectionHeader(text: vocab.pillar, color: store.moduleColor("workStudy"))
-                Spacer()
+            SectionHeaderRow(text: vocab.pillar, color: store.moduleColor("workStudy")) {
                 Button { showFocus = true } label: {
                     Label("Focus", systemImage: "scope").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
-                }.padding(.trailing, 8).padding(.top, 22)
+                }
                 Button { showStudy = true } label: {
                     Text("Manage").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentDark)
-                }.padding(.trailing, 8).padding(.top, 22)
+                }
             }
 
             ForEach(store.data.countdowns) { cd in

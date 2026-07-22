@@ -17,6 +17,7 @@ final class ThemeController: ObservableObject {
 
     @Published private(set) var mode: ThemeMode = .system
     @Published private(set) var darkStyle: DarkStyle = .grey
+    @Published private(set) var palette: ThemePalette = .indigo
     @Published private(set) var glassOn = true
 
     private var observer: NSObjectProtocol?
@@ -26,6 +27,7 @@ final class ThemeController: ObservableObject {
         let d = UserDefaults.standard
         darkStyle = DarkStyle(rawValue: d.string(forKey: Theme.darkStyleKey) ?? "") ?? .grey
         mode = ThemeMode(rawValue: d.string(forKey: Self.modeKey) ?? "") ?? .system
+        palette = ThemePalette(rawValue: d.string(forKey: Theme.paletteKey) ?? "") ?? .indigo
         glassOn = !d.bool(forKey: Theme.reduceTransparencyKey)
     }
 
@@ -43,23 +45,26 @@ final class ThemeController: ObservableObject {
     }
 
     /// Push the persisted preference into the mirrors. Called on launch and whenever Settings change.
-    func apply(mode newMode: ThemeMode, darkStyle newStyle: DarkStyle) {
+    func apply(mode newMode: ThemeMode, darkStyle newStyle: DarkStyle, palette newPalette: ThemePalette) {
         let d = UserDefaults.standard
         var changed = false
         if newMode != mode {
             mode = newMode
-            d.set(newMode.rawValue, forKey: Self.modeKey)
             changed = true
         }
         if newStyle != darkStyle {
             darkStyle = newStyle
-            d.set(newStyle.rawValue, forKey: Theme.darkStyleKey)
             changed = true
         }
-        // Always reconcile the mirror even when the value matched in memory — a restored backup can
+        if newPalette != palette {
+            palette = newPalette
+            changed = true
+        }
+        // Always reconcile the mirrors even when the value matched in memory — a restored backup can
         // replace AppSettings without going through this method.
         d.set(newStyle.rawValue, forKey: Theme.darkStyleKey)
         d.set(newMode.rawValue, forKey: Self.modeKey)
+        d.set(newPalette.rawValue, forKey: Theme.paletteKey)
         if changed { revision += 1 }
     }
 

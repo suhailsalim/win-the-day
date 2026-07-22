@@ -172,6 +172,7 @@ struct FlowLayout: Layout {
 /// Generic concentric ring gauge — the shared visual for the Today ring row, ring detail sheets,
 /// and the sleep/readiness module. `fraction` is 0...1; `available` renders a dim "—" placeholder
 /// instead of a misleading empty/zero ring when there's no data yet.
+/// `lineWidth` nil = proportional to size (the thick Apple-rings look); pass a value to override.
 struct RingGaugeView: View {
     var fraction: Double
     var value: String
@@ -179,23 +180,51 @@ struct RingGaugeView: View {
     var color: Color
     var available: Bool = true
     var size: CGFloat = 66
-    var lineWidth: CGFloat = 7
+    var lineWidth: CGFloat? = nil
+
+    private var stroke: CGFloat { lineWidth ?? max(8, size * 0.14) }
 
     var body: some View {
         ZStack {
-            Circle().stroke(Theme.tertiaryInk.opacity(0.15), lineWidth: lineWidth)
+            Circle()
+                .stroke(color.opacity(available ? 0.16 : 0.10), lineWidth: stroke)
             if available {
-                Circle().trim(from: 0, to: max(0.01, min(1, fraction)))
-                    .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                // The arc sweeps from a dimmer tail into the full colour — reads as depth on glass
+                // without needing a second hue.
+                Circle().trim(from: 0, to: max(0.015, min(1, fraction)))
+                    .stroke(
+                        AngularGradient(gradient: Gradient(colors: [color.opacity(0.55), color]),
+                                        center: .center,
+                                        startAngle: .degrees(0), endAngle: .degrees(360)),
+                        style: StrokeStyle(lineWidth: stroke, lineCap: .round)
+                    )
                     .rotationEffect(.degrees(-90))
                     .animation(.easeOut(duration: 0.4), value: fraction)
             }
             VStack(spacing: 0) {
-                Text(available ? value : "—").font(Theme.serif(size * 0.36)).foregroundStyle(available ? Theme.ink : Theme.tertiaryInk)
-                Text(label).font(.system(size: size * 0.135)).foregroundStyle(Theme.tertiaryInk).lineLimit(1)
+                Text(available ? value : "—")
+                    .font(Theme.serif(size * 0.30)).foregroundStyle(available ? Theme.ink : Theme.tertiaryInk)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                Text(label).font(.system(size: max(8.5, size * 0.115))).foregroundStyle(Theme.tertiaryInk).lineLimit(1)
             }
+            .padding(.horizontal, stroke + 3)
         }
         .frame(width: size, height: size)
+    }
+}
+
+/// Section header + trailing action(s) on one clean baseline — replaces the ad-hoc
+/// `SectionHeader … Spacer … Button().padding(.top, 22)` pattern that drifted per call site.
+struct SectionHeaderRow<Trailing: View>: View {
+    let text: String
+    var color: Color? = nil
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        HStack(alignment: .lastTextBaseline, spacing: 8) {
+            SectionHeader(text: text, color: color)
+            trailing().padding(.trailing, 8)
+        }
     }
 }
 

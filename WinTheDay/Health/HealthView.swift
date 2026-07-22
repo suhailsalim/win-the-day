@@ -12,22 +12,24 @@ struct HealthView: View {
             ScreenTitle(sub: "Live from Apple Health", title: "Health")
 
             banner
+            SectionHeader(text: "Your health profile")
+            profileCard
             SectionHeader(text: "Today & latest")
             metricsGrid
-            SectionHeader(text: "Import reports")
-            importSection
             if !store.data.bodyComps.isEmpty || !store.data.labs.isEmpty {
                 SectionHeader(text: "Biology")
                 biologyCard
+            }
+            SectionHeader(text: "Import reports")
+            importSection
+            if !store.data.bodyComps.isEmpty || !store.data.labs.isEmpty {
                 SectionHeader(text: "Recent imports")
                 recentImports
             }
-            HStack {
-                SectionHeader(text: "Health profile & notes")
-                Spacer()
+            SectionHeaderRow(text: "Notes & findings") {
                 Button { editNote = nil; showNote = true } label: {
                     Label("Add", systemImage: "plus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
-                }.padding(.trailing, 8).padding(.top, 22)
+                }
             }
             notesSection
             footer
@@ -43,6 +45,74 @@ struct HealthView: View {
     @State private var showNote = false
     @State private var editNote: HealthNote?
     @State private var showBiology = false
+
+    // MARK: - Health profile (auto-composed, on-device)
+
+    /// One card that answers "who is this person, health-wise?" — stitched together from targets,
+    /// the latest body-comp import, meds/regimens and notes. Nothing here is typed twice: every
+    /// line is derived from data the user already gave the app, and updates itself on import.
+    private var profileCard: some View {
+        let t = store.targets
+        let comp = store.data.bodyComps.sorted { $0.date > $1.date }.first
+        let conditions = store.data.healthNotes.filter { $0.category == "condition" }
+            .map { $0.title.isEmpty ? String($0.text.prefix(40)) : $0.title }
+        let findings = store.data.healthNotes.filter { $0.category == "finding" }.count
+        var meds: [String] = []
+        for name in store.data.healthNotes.filter({ $0.category == "medication" }).map(\.title)
+                    + store.activeRegimens.map(\.name) {
+            if !name.isEmpty && !meds.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) {
+                meds.append(name)
+            }
+        }
+        return GlassCard(padding: 16) {
+            VStack(alignment: .leading, spacing: 9) {
+                profileRow("Basics", "\(Int(t.ageYears)) y · \(Int(t.heightCm)) cm · \(t.sexMale ? "male" : "female") · \(goalWord(t.goal))")
+                if let comp {
+                    profileRow("Body", bodyProfileLine(comp))
+                } else if health.latestWeight > 0 {
+                    profileRow("Body", String(format: "%.1f kg", health.latestWeight))
+                }
+                if !conditions.isEmpty { profileRow("Conditions", conditions.joined(separator: ", ")) }
+                if !meds.isEmpty { profileRow("Meds & supps", meds.joined(separator: ", ")) }
+                if !t.prizeName.isEmpty {
+                    profileRow("The prize", "\(t.prizeName) \(TargetsPage.fmt(t.prizeCurrent)) → \(t.prizeLowerIsBetter ? "≤" : "≥")\(TargetsPage.fmt(t.prizeTarget))\(t.prizeUnit.isEmpty ? "" : " \(t.prizeUnit)")")
+                }
+                if findings > 0 {
+                    profileRow("Findings", "\(findings) report finding\(findings == 1 ? "" : "s") in Notes below")
+                }
+                Text("Composed on your device from targets, imports, meds and notes — it updates itself and gives your AI coach its context.")
+                    .font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    private func profileRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label.uppercased()).font(.system(size: 10.5, weight: .semibold)).tracking(0.3)
+                .foregroundStyle(Theme.tertiaryInk).frame(width: 88, alignment: .leading)
+            Text(value).font(.system(size: 13.5)).foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func goalWord(_ g: String) -> String {
+        switch g {
+        case "cut": return "cutting"
+        case "bulk": return "bulking"
+        default: return "maintaining"
+        }
+    }
+
+    private func bodyProfileLine(_ c: BodyComp) -> String {
+        var parts: [String] = []
+        if let w = c.weight { parts.append(String(format: "%.1f kg", w)) }
+        if let bf = c.bodyFat { parts.append(String(format: "%.1f%% fat", bf)) }
+        if let sm = c.skeletalMuscle { parts.append(String(format: "%.1f kg muscle", sm)) }
+        if let v = c.visceralFat { parts.append("VF \(Int(v))") }
+        return parts.joined(separator: " · ") + " · \(c.date)"
+    }
 
     // MARK: - Biology entry point
 
@@ -79,7 +149,7 @@ struct HealthView: View {
     private var notesSection: some View {
         VStack(spacing: 0) {
             if store.data.healthNotes.isEmpty {
-                Text("Add conditions, injuries, medications, supplements or goals. Your AI coach uses these to tailor advice.")
+                Text("Add conditions, injuries, medications, supplements or goals — or import a report above and findings appear here on their own. Your AI coach uses these to tailor advice.")
                     .font(.system(size: 13.5)).foregroundStyle(Theme.secondaryInk)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(16).glassList()
             } else {
@@ -91,8 +161,17 @@ struct HealthView: View {
                                          colors: [Theme.adaptive(light: 0x9D8CFF, darkGrey: 0xB7ABFF),
                                                   Theme.adaptive(light: 0x5B43E0, darkGrey: 0x8471F2)], size: 30, corner: 9)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(n.title.isEmpty ? HealthNote.label(n.category) : n.title)
-                                        .font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink)
+                                    HStack(spacing: 6) {
+                                        Text(n.title.isEmpty ? HealthNote.label(n.category) : n.title)
+                                            .font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.ink)
+                                            .lineLimit(1)
+                                        if n.isAuto {
+                                            Text("AUTO").font(.system(size: 8.5, weight: .bold)).tracking(0.4)
+                                                .foregroundStyle(Theme.onAccent)
+                                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                                .background(Capsule().fill(Theme.accentDark))
+                                        }
+                                    }
                                     if !n.text.isEmpty {
                                         Text(n.text).font(.system(size: 12.5)).foregroundStyle(Theme.tertiaryInk).lineLimit(2)
                                     } else {

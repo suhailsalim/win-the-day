@@ -15,8 +15,8 @@ struct PlanView: View {
         VStack(spacing: 0) {
             ScreenTitle(sub: "Win the week", title: "Plan")
             outlookCard
-            generatePlanButton
             todayPlanCard
+            generatePlanButton
             upcomingSessionsCard
             eventsCard
             routineButton
@@ -137,37 +137,80 @@ struct PlanView: View {
 
     private var todayPlanCard: some View {
         let routine = store.expectedToday()
-        let sessions = store.data.sessions.filter { Calendar.current.isDateInToday($0.date) && !$0.done }
+        let open = store.data.sessions.filter { Calendar.current.isDateInToday($0.date) && !$0.done }
+        let doneToday = store.data.sessions.filter { Calendar.current.isDateInToday($0.date) && $0.done }
         let events = calendar.calAuthorized ? calendar.eventsOn(Date()).prefix(5).map { $0 } : []
-        return Group {
-            if routine.isEmpty && sessions.isEmpty && events.isEmpty {
-                EmptyView()
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    SectionHeader(text: "Today's plan", color: Theme.accentDark)
-                    VStack(spacing: 0) {
-                        ForEach(sessions) { s in
-                            planRow(symbol: ScheduledSession.symbol(s.kind),
-                                    title: s.title.isEmpty ? ScheduledSession.label(s.kind) : s.title,
-                                    detail: timeStr(s.date) + (s.withPT ? " · with PT" : ""))
-                            Hairline()
-                        }
-                        ForEach(routine) { b in
-                            planRow(symbol: ScheduledSession.symbol(b.kind),
-                                    title: b.title.isEmpty ? ScheduledSession.label(b.kind) : b.title,
-                                    detail: String(format: "%02d:%02d · routine", b.hour, b.minute))
-                            if b.id != routine.last?.id || !events.isEmpty { Hairline() }
-                        }
-                        ForEach(Array(events.enumerated()), id: \.offset) { idx, ev in
-                            planRow(symbol: "calendar", title: ev.title ?? "Event",
-                                    detail: ev.startDate.map { timeStr($0) } ?? "")
-                            if idx < events.count - 1 { Hairline() }
-                        }
-                    }
-                    .glassList()
+        return VStack(alignment: .leading, spacing: 0) {
+            SectionHeaderRow(text: "Today's plan", color: Theme.accentDark) {
+                if !doneToday.isEmpty {
+                    Text("\(doneToday.count) done")
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.sage)
                 }
             }
+            if routine.isEmpty && open.isEmpty && events.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(doneToday.isEmpty ? "Nothing planned for today." : "All of today's sessions are done — nice.")
+                        .font(.system(size: 13.5)).foregroundStyle(Theme.secondaryInk)
+                    HStack(spacing: 8) {
+                        planChip("Add a session", "plus") { showSession = true }
+                        if !store.data.routine.isEmpty {
+                            planChip("Fill from routine", "wand.and.stars") { store.generateWeekFromRoutine(calendar: calendar) }
+                        }
+                    }
+                }
+                .padding(16).frame(maxWidth: .infinity, alignment: .leading).glassList()
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(open) { s in
+                        HStack(spacing: 11) {
+                            // Tick it off right here — done sessions feed the week grid & streaks.
+                            Button { store.completeSession(s.id) } label: {
+                                Image(systemName: "circle").font(.system(size: 20)).foregroundStyle(Theme.tertiaryInk)
+                            }.buttonStyle(.plain)
+                            Button { editSession = s } label: {
+                                HStack(spacing: 11) {
+                                    IconTile(symbol: ScheduledSession.symbol(s.kind), colors: [Theme.accent, Theme.accentDark], size: 28, corner: 8)
+                                    Text(s.title.isEmpty ? ScheduledSession.label(s.kind) : s.title)
+                                        .font(.system(size: 15)).foregroundStyle(Theme.ink)
+                                    Spacer()
+                                    Text(timeStr(s.date) + (s.withPT ? " · with PT" : ""))
+                                        .font(.system(size: 12.5))
+                                        .foregroundStyle(s.date < Date() ? Theme.coral : Theme.tertiaryInk)
+                                }
+                            }.buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        Hairline()
+                    }
+                    ForEach(routine) { b in
+                        planRow(symbol: ScheduledSession.symbol(b.kind),
+                                title: b.title.isEmpty ? ScheduledSession.label(b.kind) : b.title,
+                                detail: String(format: "%02d:%02d · routine", b.hour, b.minute))
+                        if b.id != routine.last?.id || !events.isEmpty { Hairline() }
+                    }
+                    ForEach(Array(events.enumerated()), id: \.offset) { idx, ev in
+                        planRow(symbol: "calendar", title: ev.title ?? "Event",
+                                detail: ev.startDate.map { timeStr($0) } ?? "")
+                        if idx < events.count - 1 { Hairline() }
+                    }
+                }
+                .glassList()
+            }
         }
+    }
+
+    private func planChip(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+                Text(title).font(.system(size: 13.5, weight: .semibold))
+            }
+            .foregroundStyle(Theme.accentDark)
+            .padding(.horizontal, 13).padding(.vertical, 9)
+            .background(Capsule().fill(Theme.accent.opacity(0.14))
+                .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 0.5)))
+        }
+        .buttonStyle(.plain)
     }
 
     private func planRow(symbol: String, title: String, detail: String) -> some View {
@@ -185,18 +228,17 @@ struct PlanView: View {
     @ViewBuilder private var upcomingSessionsCard: some View {
         let sessions = store.upcomingSessions(days: 7)
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                SectionHeader(text: "Upcoming sessions", color: Theme.sage)
-                Spacer()
+            SectionHeaderRow(text: "Upcoming sessions", color: Theme.sage) {
                 if !store.data.routine.isEmpty {
                     Button { store.generateWeekFromRoutine(calendar: calendar) } label: {
                         Label("Fill week", systemImage: "wand.and.stars").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
-                    }.padding(.trailing, 8).padding(.top, 22)
+                    }
                 }
                 Button { showSession = true } label: {
                     Label("Add", systemImage: "plus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
-                }.padding(.trailing, 8).padding(.top, 22)
+                }
             }
+            weekSessionsProgress
             if sessions.isEmpty {
                 Text("No sessions scheduled. Add one or fill the week from your routine.")
                     .font(.system(size: 13.5)).foregroundStyle(Theme.secondaryInk)
@@ -204,6 +246,7 @@ struct PlanView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(sessions.prefix(10).enumerated()), id: \.element.id) { idx, s in
+                        let overdue = s.date < Date() && !Calendar.current.isDateInToday(s.date)
                         HStack(spacing: 11) {
                             Button { store.completeSession(s.id) } label: {
                                 Image(systemName: "circle").font(.system(size: 20)).foregroundStyle(Theme.tertiaryInk)
@@ -213,7 +256,8 @@ struct PlanView: View {
                                     IconTile(symbol: ScheduledSession.symbol(s.kind), colors: [Theme.accent, Theme.accentDark], size: 28, corner: 8)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(s.title.isEmpty ? ScheduledSession.label(s.kind) : s.title).font(.system(size: 15)).foregroundStyle(Theme.ink)
-                                        Text("\(AppStore.shortDate(s.date)) \(timeStr(s.date))\(s.withPT ? " · PT" : "")").font(.system(size: 12.5)).foregroundStyle(Theme.tertiaryInk)
+                                        Text("\(AppStore.shortDate(s.date)) \(timeStr(s.date))\(s.withPT ? " · PT" : "")\(overdue ? " · missed" : "")")
+                                            .font(.system(size: 12.5)).foregroundStyle(overdue ? Theme.coral : Theme.tertiaryInk)
                                     }
                                     Spacer()
                                     if s.calendarEventID != nil { Image(systemName: "calendar").font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk) }
@@ -229,23 +273,53 @@ struct PlanView: View {
         }
     }
 
+    private var sessionsThisWeek: [ScheduledSession] {
+        var weekCal = Calendar(identifier: .gregorian); weekCal.firstWeekday = 2
+        guard let week = weekCal.dateInterval(of: .weekOfYear, for: Date()) else { return [] }
+        return store.data.sessions.filter { week.contains($0.date) }
+    }
+
+    /// This week's sessions at a glance: done / planned, with a thin progress bar.
+    @ViewBuilder private var weekSessionsProgress: some View {
+        let thisWeek = sessionsThisWeek
+        let done = thisWeek.filter(\.done).count
+        if !thisWeek.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack {
+                    Text("This week").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.secondaryInk)
+                    Spacer()
+                    Text("\(done)/\(thisWeek.count) sessions done")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(done == thisWeek.count ? Theme.sage : Theme.secondaryInk)
+                }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Theme.tertiaryInk.opacity(0.15)).frame(height: 5)
+                        Capsule().fill(done == thisWeek.count ? Theme.sage : Theme.accentDark)
+                            .frame(width: geo.size.width * (Double(done) / Double(max(1, thisWeek.count))), height: 5)
+                    }
+                }
+                .frame(height: 5)
+            }
+            .padding(.horizontal, 4).padding(.bottom, 10)
+        }
+    }
+
     // MARK: - Events
 
     @ViewBuilder private var eventsCard: some View {
         let occ = store.upcomingOccasions(days: 120)
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                SectionHeader(text: "Events & travel", color: Theme.accentDark)
-                Spacer()
+            SectionHeaderRow(text: "Events & travel", color: Theme.accentDark) {
                 Button {
                     let n = store.importOccasions(from: calendar)
                     importMsg = n > 0 ? "Imported \(n)" : "Nothing new"
                 } label: {
                     Label("Import", systemImage: "square.and.arrow.down").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
-                }.padding(.trailing, 8).padding(.top, 22)
+                }
                 Button { showOccasion = true } label: {
                     Label("Add", systemImage: "plus").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentDark)
-                }.padding(.trailing, 8).padding(.top, 22)
+                }
             }
             if !importMsg.isEmpty {
                 Text(importMsg).font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
