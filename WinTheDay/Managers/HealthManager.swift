@@ -155,6 +155,10 @@ final class HealthManager: ObservableObject {
     /// 90 days so the 30-day and "All" ranges show real history instead of being capped short.
     func loadStepsHistory(days: Int = 90) async {
         guard available else { return }
+        // A collection query silently returns zero-sums when step reading was never authorized —
+        // there is no error to catch. Asking first turns "empty chart forever" into the standard
+        // permission sheet on the first visit (a no-op once the user has answered it).
+        if !authorized { await requestAuthorization() }
         let cal = Calendar.current
         let end = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date())) ?? Date()
         guard let start = cal.date(byAdding: .day, value: -days, to: cal.startOfDay(for: Date())) else { return }
@@ -177,7 +181,10 @@ final class HealthManager: ObservableObject {
         // Trim leading zero-only days so the chart starts at real data.
         var trimmed = result
         while let first = trimmed.first, first == 0, trimmed.count > 1 { trimmed.removeFirst() }
-        stepsHistory = trimmed
+        // All zeros = Health has nothing for us (denied read or a device with no step data).
+        // Publish empty so Trends falls back to the steps logged in the app instead of rendering
+        // a flat, empty-looking chart.
+        stepsHistory = trimmed.allSatisfy { $0 == 0 } ? [] : trimmed
     }
 
     private func fetchWeight(before end: Date) async -> Double? {

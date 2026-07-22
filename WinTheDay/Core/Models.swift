@@ -303,7 +303,7 @@ enum RingSource: String, Codable, CaseIterable, Identifiable, Equatable {
 /// hours" ring — `Entry.studyHours` is already fed by real completed sessions (`logStudySession`,
 /// including Focus-mode sessions), so a separate metric would just fragment the same data.
 enum RingMetric: String, Codable, CaseIterable, Identifiable, Equatable {
-    case hydrationPct, studyGoalPct, proteinPct, quranPages, unknown
+    case hydrationPct, studyGoalPct, proteinPct, quranPages, stepsPct, caloriesPct, habitsPct, unknown
     var id: String { rawValue }
     var label: String {
         switch self {
@@ -311,6 +311,9 @@ enum RingMetric: String, Codable, CaseIterable, Identifiable, Equatable {
         case .studyGoalPct: return "Study/work/focus hours goal"
         case .proteinPct: return "Protein target"
         case .quranPages: return "Qur'an pages (khatmah pace)"
+        case .stepsPct: return "Steps target"
+        case .caloriesPct: return "Calorie budget"
+        case .habitsPct: return "Non-negotiables done"
         case .unknown: return "Not configured"
         }
     }
@@ -948,10 +951,13 @@ struct HealthNote: Codable, Identifiable, Equatable {
     var dateEpoch: Double = 0
     var title: String = ""
     var text: String = ""
-    var category: String = "note"   // condition | medication | injury | goal | note
+    var category: String = "note"   // condition | medication | injury | goal | note | finding
+    /// Non-empty when the note was created automatically from an import — holds the source
+    /// record's id ("lab:<id>" / "body:<id>") so a re-import updates the same note in place.
+    var source: String = ""
 
-    init(title: String = "", text: String = "", category: String = "note") {
-        self.title = title; self.text = text; self.category = category
+    init(title: String = "", text: String = "", category: String = "note", source: String = "") {
+        self.title = title; self.text = text; self.category = category; self.source = source
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -960,14 +966,18 @@ struct HealthNote: Codable, Identifiable, Equatable {
         title = (try? c.decode(String.self, forKey: .title)) ?? ""
         text = (try? c.decode(String.self, forKey: .text)) ?? ""
         category = (try? c.decode(String.self, forKey: .category)) ?? "note"
+        source = (try? c.decode(String.self, forKey: .source)) ?? ""
     }
+
+    var isAuto: Bool { !source.isEmpty }
 
     static let categories: [(id: String, label: String, symbol: String)] = [
         ("condition", "Condition", "stethoscope"),
         ("medication", "Medication / supplement", "pills.fill"),
         ("injury", "Injury / physio", "bandage.fill"),
         ("goal", "Goal", "target"),
-        ("note", "Note", "note.text")
+        ("note", "Note", "note.text"),
+        ("finding", "Report finding", "doc.text.magnifyingglass")
     ]
     static func label(_ c: String) -> String { categories.first { $0.id == c }?.label ?? "Note" }
     static func symbol(_ c: String) -> String { categories.first { $0.id == c }?.symbol ?? "note.text" }
@@ -1377,6 +1387,34 @@ enum DarkStyle: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// The app's overall colour palette — accents, background wash and glass tints follow it.
+/// Lives here (not UI/Theme.swift) for the same reason as `ThemeMode`: the Foundation-only test
+/// package compiles this file. The actual colour tables are in UI/Theme.swift.
+enum ThemePalette: String, Codable, CaseIterable, Sendable {
+    case indigo, sand, sage, ocean, rose, mono
+
+    var label: String {
+        switch self {
+        case .indigo: return "Indigo"
+        case .sand:   return "Warm sand"
+        case .sage:   return "Sage"
+        case .ocean:  return "Ocean"
+        case .rose:   return "Rose"
+        case .mono:   return "Graphite"
+        }
+    }
+    var note: String {
+        switch self {
+        case .indigo: return "Cool indigo on neutral glass"
+        case .sand:   return "The original warm beige look"
+        case .sage:   return "Calm greens"
+        case .ocean:  return "Sea blues"
+        case .rose:   return "Soft warm pinks"
+        case .mono:   return "Just greys — no colour cast"
+        }
+    }
+}
+
 struct AppSettings: Codable, Equatable {
     var provider = "anthropic"
     var model = "sonnet46"
@@ -1387,16 +1425,22 @@ struct AppSettings: Codable, Equatable {
     var hkWrite = HKWriteFlags()
     var calendarSync = false
     var remindersSync = false
-    var visibleRingCount = 4        // 3 or 4 — how many rings show in the Today ring row
+    var visibleRingCount = 4        // 3–6 — how many rings show on Today (5–6 wrap to a second row)
 
     // Appearance (palette in UI/Theme.swift + Managers/ThemeController.swift). Stored as raw strings so an
     // unknown value written by a newer build falls back instead of throwing. Liquid glass has no
     // setting here on purpose — it follows iOS Accessibility → Reduce Transparency.
     var themeMode = ThemeMode.system.rawValue
     var darkStyle = DarkStyle.grey.rawValue
+    var themePalette = ThemePalette.indigo.rawValue
 
     var theme: ThemeMode { ThemeMode(rawValue: themeMode) ?? .system }
     var dark: DarkStyle { DarkStyle(rawValue: darkStyle) ?? .grey }
+    var palette: ThemePalette { ThemePalette(rawValue: themePalette) ?? .indigo }
+
+    /// After a lab / body-comp import, out-of-range findings become auto notes on the Health tab.
+    /// Deterministic (BiologyCatalog ranges) — no extra AI call, nothing extra leaves the phone.
+    var autoHealthNotes = true
 
     // App lock (Face ID / Touch ID with device-passcode fallback) — see AppLock.
     var appLockEnabled = false
@@ -1436,12 +1480,15 @@ struct AppSettings: Codable, Equatable {
         calendarSync = (try? c.decode(Bool.self, forKey: .calendarSync)) ?? false
         remindersSync = (try? c.decode(Bool.self, forKey: .remindersSync)) ?? false
         let ringCount = (try? c.decode(Int.self, forKey: .visibleRingCount)) ?? 4
-        visibleRingCount = min(4, max(3, ringCount))
+        visibleRingCount = min(6, max(3, ringCount))
         // Unknown/typo'd appearance values fall back to the defaults rather than throwing.
         let mode = (try? c.decode(String.self, forKey: .themeMode)) ?? ThemeMode.system.rawValue
         themeMode = (ThemeMode(rawValue: mode) ?? .system).rawValue
         let dk = (try? c.decode(String.self, forKey: .darkStyle)) ?? DarkStyle.grey.rawValue
         darkStyle = (DarkStyle(rawValue: dk) ?? .grey).rawValue
+        let pal = (try? c.decode(String.self, forKey: .themePalette)) ?? ThemePalette.indigo.rawValue
+        themePalette = (ThemePalette(rawValue: pal) ?? .indigo).rawValue
+        autoHealthNotes = (try? c.decode(Bool.self, forKey: .autoHealthNotes)) ?? true
         appLockEnabled = (try? c.decode(Bool.self, forKey: .appLockEnabled)) ?? false
         let grace = (try? c.decode(Int.self, forKey: .appLockGraceMinutes)) ?? 1
         appLockGraceMinutes = AppSettings.appLockGraceOptions.contains(grace) ? grace : 1

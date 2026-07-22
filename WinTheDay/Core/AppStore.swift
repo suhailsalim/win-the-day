@@ -1202,7 +1202,7 @@ final class AppStore: ObservableObject {
     /// All rings in editor order (for the ring editor / reorder sheet).
     var allRingsOrdered: [RingDef] { data.rings.sorted { $0.order < $1.order } }
 
-    /// The rings actually shown on Today: enabled, in order, capped to the user's chosen count (3 or 4).
+    /// The rings actually shown on Today: enabled, in order, capped to the user's chosen count (3–6).
     var visibleRings: [RingDef] {
         Array(allRingsOrdered.filter { $0.enabled }.prefix(settings.visibleRingCount))
     }
@@ -1233,7 +1233,7 @@ final class AppStore: ObservableObject {
         persistData(); publishSnapshot()
     }
     func setVisibleRingCount(_ n: Int) {
-        updateSettings { $0.visibleRingCount = min(4, max(3, n)) }
+        updateSettings { $0.visibleRingCount = min(6, max(3, n)) }
         publishSnapshot()
     }
 
@@ -1244,6 +1244,8 @@ final class AppStore: ObservableObject {
         RingEngine.Context(waterTargetMl: waterTargetMl, studyGoalHours: targets.studyHours,
                            proteinTargetG: targets.protein,
                            quranDailyTarget: Double(quranStatus?.dailyTarget ?? 0),
+                           stepsTarget: targets.steps, calorieTarget: targets.calories,
+                           habitsDone: score(draft), habitsTotal: habitTotal,
                            prayerTimes: prayerTimes, nextFajr: nextFajr)
     }
     func ringResult(_ def: RingDef, prayerTimes: PrayerTimes?, nextFajr: Date?) -> RingResult {
@@ -2283,8 +2285,41 @@ final class AppStore: ObservableObject {
         } else {
             data.labs.insert(r, at: 0)
         }
+        autoNoteFromLab(r)
         persistData()
         return r
+    }
+
+    // MARK: - Auto health notes (deterministic findings from imports)
+
+    /// Turn a committed report's out-of-range results into ONE "finding" note on the Health tab —
+    /// computed on-device from `BiologyCatalog`'s general reference ranges, never an AI call and
+    /// never a diagnosis. Keyed by the record's id, so re-importing (Replace) rewrites the same
+    /// note instead of stacking duplicates; a fully-in-range report clears any earlier note.
+    private func autoNoteFromLab(_ record: LabRecord) {
+        guard settings.autoHealthNotes else { return }
+        let sourceKey = "lab:\(record.id)"
+        var lines: [String] = []
+        for item in record.items {
+            guard let id = item.canonicalId, let def = BiologyCatalog.def(id: id) else { continue }
+            let unit = item.unit.isEmpty ? def.unit : item.unit
+            switch BiologyCatalog.status(value: item.value, def: def, sexMale: targets.sexMale) {
+            case .above: lines.append("\(def.name): \(fmtT(item.value)) \(unit) — above the general range")
+            case .below: lines.append("\(def.name): \(fmtT(item.value)) \(unit) — below the general range")
+            case .inRange, .unknown: break
+            }
+        }
+        data.healthNotes.removeAll { $0.source == sourceKey }
+        if !lines.isEmpty {
+            let when = BiologyCatalog.effectiveDate(record)
+            var note = HealthNote(
+                title: "Findings · \(record.title)" + (when.isEmpty ? "" : " · \(when)"),
+                text: lines.joined(separator: "\n")
+                    + "\n\nAuto-created from this imported report against general adult reference ranges — a record, not a diagnosis. Edit or delete freely; your coach sees it as context.",
+                category: "finding", source: sourceKey)
+            note.dateEpoch = Date().timeIntervalSince1970
+            data.healthNotes.append(note)
+        }
     }
 
     // MARK: - Biology (canonical analyte series over every report)

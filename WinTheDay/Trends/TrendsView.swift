@@ -13,6 +13,7 @@ struct TrendsView: View {
                 insightsCard
                 prize
                 statGrid
+                winsStrip
                 readinessCard
                 eatingCard
                 microsCard
@@ -20,6 +21,7 @@ struct TrendsView: View {
                 trainingCard
                 MilestonesCard()
                 rangePicker
+                rangeSummary
                 charts
                 Text("The trend is the signal — daily scale noise isn\u{2019}t. Waist, photos and your jog are better proof than any single morning.")
                     .font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
@@ -42,6 +44,73 @@ struct TrendsView: View {
         }
         .pickerStyle(.segmented)
         .padding(.top, 14)
+    }
+
+    /// The active steps series: Apple Health daily totals when available, else the steps logged in-app.
+    private var stepsSeries: [Double] {
+        health.stepsHistory.isEmpty ? store.stepsSeries() : health.stepsHistory
+    }
+
+    /// Quick averages for the picked range — answers "how am I actually doing?" without reading charts.
+    @ViewBuilder private var rangeSummary: some View {
+        let steps = win(stepsSeries)
+        let protein = win(store.proteinSeries())
+        let readiness = win(store.readinessSeries())
+        let scores = win(store.scoreSeries())
+        let wins = scores.filter { $0 >= 3 }.count
+        HStack(spacing: 10) {
+            summaryPill("Steps/day", steps.isEmpty ? "—" : shortNum(avgOf(steps)))
+            summaryPill("Protein/day", protein.isEmpty ? "—" : "\(Int(avgOf(protein)))g")
+            summaryPill("Readiness", readiness.isEmpty ? "—" : "\(Int(avgOf(readiness)))")
+            summaryPill("Days ≥3/5", scores.isEmpty ? "—" : "\(wins)/\(scores.count)")
+        }
+        .padding(.top, 10)
+    }
+
+    private func avgOf(_ a: [Double]) -> Double { a.isEmpty ? 0 : a.reduce(0, +) / Double(a.count) }
+
+    private func summaryPill(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(Theme.display(17)).foregroundStyle(Theme.ink)
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Text(label).font(.system(size: 10)).foregroundStyle(Theme.tertiaryInk).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.surfaceOverlay)
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.surfaceStroke, lineWidth: 0.5)))
+    }
+
+    private func shortNum(_ d: Double) -> String {
+        d >= 10000 ? String(format: "%.1fk", d / 1000) : "\(Int(d))"
+    }
+
+    /// Last 4 weeks at a glance — one dot per day: won, logged, or empty. Ends on today.
+    private var winsStrip: some View {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let days: [(String, Bool, Bool)] = (0..<28).reversed().map { back in
+            let d = cal.date(byAdding: .day, value: -back, to: today) ?? today
+            let e = store.data.entries[AppStore.dateString(d)]
+            return (AppStore.dateString(d), e.map { store.dayWon($0) } ?? false, e?.isMeaningful ?? false)
+        }
+        let wonCount = days.filter(\.1).count
+        return GlassCard(padding: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Last 4 weeks").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink)
+                    Spacer()
+                    Text("\(wonCount) day\(wonCount == 1 ? "" : "s") won").font(.system(size: 12)).foregroundStyle(Theme.tertiaryInk)
+                }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7), spacing: 6) {
+                    ForEach(days, id: \.0) { day in
+                        Circle()
+                            .fill(day.1 ? Theme.sage : (day.2 ? Theme.accent.opacity(0.45) : Theme.tertiaryInk.opacity(0.12)))
+                            .frame(height: 14)
+                    }
+                }
+            }
+        }
+        .padding(.top, 12)
     }
 
     @ViewBuilder private var insightsCard: some View {
@@ -189,11 +258,24 @@ struct TrendsView: View {
             }
         }
 
-        let steps = win(health.stepsHistory.isEmpty ? store.stepsSeries() : health.stepsHistory)
+        let steps = win(stepsSeries)
         if !steps.isEmpty {
-            ChartCard(title: "Steps", sub: health.stepsHistory.isEmpty ? "target \(Int(store.targets.steps))" : "from Apple Health") {
-                BarChartView(points: steps.enumerated().map { BarPoint(x: $0.offset, y: $0.element, color: Theme.sage) },
-                             target: store.targets.steps)
+            let avgSteps = steps.reduce(0, +) / Double(steps.count)
+            ChartCard(title: "Steps",
+                      sub: "avg \(shortNum(avgSteps)) · target \(shortNum(store.targets.steps))"
+                           + (health.stepsHistory.isEmpty ? "" : " · Apple Health")) {
+                BarChartView(points: steps.enumerated().map {
+                    BarPoint(x: $0.offset, y: $0.element,
+                             color: $0.element >= store.targets.steps ? Theme.sage : Theme.accent)
+                }, target: store.targets.steps)
+            }
+        } else {
+            ChartCard(title: "Steps", sub: "no data yet") {
+                Text(store.settings.healthkit
+                     ? "No step data found in Apple Health yet. Once your phone or watch records steps, they show up here."
+                     : "Turn on Apple Health in Settings → Apple Health to chart your steps automatically.")
+                    .font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
 

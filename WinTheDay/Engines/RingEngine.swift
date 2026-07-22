@@ -25,6 +25,10 @@ enum RingEngine {
         var studyGoalHours: Double = 4
         var proteinTargetG: Double = 120
         var quranDailyTarget: Double = 0    // today's khatmah ask in pages (0 = no active plan)
+        var stepsTarget: Double = 8000
+        var calorieTarget: Double = 2000
+        var habitsDone: Int = 0             // satisfied non-negotiables today (AppStore precomputes)
+        var habitsTotal: Int = 0            // 0 = no habits configured → ring shows unavailable
         var prayerTimes: PrayerTimes?
         var nextFajr: Date?
     }
@@ -91,6 +95,36 @@ enum RingEngine {
             let frac = min(1, max(0, Double(entry.quranPages) / target))
             return RingResult(fraction: frac, displayValue: "\(entry.quranPages)",
                               caption: "of \(Int(target)) pages", band: band(frac), available: true)
+        case .stepsPct:
+            let target = ctx.stepsTarget > 0 ? ctx.stepsTarget : 8000
+            let steps = Double(entry.steps) ?? 0
+            guard steps > 0 else {
+                return RingResult(fraction: 0, displayValue: "—", caption: "No steps yet", band: .mid, available: false)
+            }
+            let frac = min(1, max(0, steps / target))
+            let display = steps >= 10000 ? String(format: "%.1fk", steps / 1000) : "\(Int(steps))"
+            return RingResult(fraction: frac, displayValue: display,
+                              caption: "of \(Int(target)) steps", band: band(frac), available: true)
+        case .caloriesPct:
+            // Budget semantics: full ring = budget used up; staying under keeps the band healthy,
+            // blowing past the budget flags low — the one custom ring where more isn't better.
+            let target = ctx.calorieTarget > 0 ? ctx.calorieTarget : 2000
+            let kcal = Double(entry.calories) ?? 0
+            guard kcal > 0 else {
+                return RingResult(fraction: 0, displayValue: "—", caption: "Nothing logged yet", band: .mid, available: false)
+            }
+            let frac = min(1, max(0, kcal / target))
+            let over = kcal > target * 1.05
+            return RingResult(fraction: frac, displayValue: "\(Int(kcal))",
+                              caption: over ? "over \(Int(target)) kcal" : "of \(Int(target)) kcal",
+                              band: over ? .low : .high, available: true)
+        case .habitsPct:
+            guard ctx.habitsTotal > 0 else {
+                return RingResult(fraction: 0, displayValue: "—", caption: "No habits set up", band: .mid, available: false)
+            }
+            let frac = min(1, max(0, Double(ctx.habitsDone) / Double(ctx.habitsTotal)))
+            return RingResult(fraction: frac, displayValue: "\(ctx.habitsDone)",
+                              caption: "of \(ctx.habitsTotal) done", band: band(frac), available: true)
         case .unknown:
             return RingResult(fraction: 0, displayValue: "—", caption: "Not configured", band: .mid, available: false)
         }

@@ -169,6 +169,10 @@ struct ImportReportView: View {
             }
             Text("♥ = saved to Apple Health · ▥ = kept in app (Health doesn\u{2019}t accept this type)")
                 .font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk).padding(.top, 4)
+            if store.settings.autoHealthNotes {
+                Text("Any out-of-range results were also added as a finding note on the Health tab — your profile keeps itself up to date.")
+                    .font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk)
+            }
         }
         .padding(16).glassList().padding(.top, 12)
     }

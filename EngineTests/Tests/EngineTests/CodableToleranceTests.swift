@@ -593,8 +593,36 @@ final class CodableToleranceTests: XCTestCase {
     // MARK: - Clamps and derived defaults inside tolerant decoders
 
     func testVisibleRingCountIsClampedOnDecode() throws {
-        XCTAssertEqual(try decode(AppSettings.self, #"{"visibleRingCount":99}"#).visibleRingCount, 4)
+        // 3–6 since the ring row learned to wrap onto a second row.
+        XCTAssertEqual(try decode(AppSettings.self, #"{"visibleRingCount":99}"#).visibleRingCount, 6)
         XCTAssertEqual(try decode(AppSettings.self, #"{"visibleRingCount":0}"#).visibleRingCount, 3)
+        XCTAssertEqual(try decode(AppSettings.self, #"{"visibleRingCount":5}"#).visibleRingCount, 5)
+    }
+
+    func testThemePaletteAndAutoNotesTolerance() throws {
+        // Settings saved before palettes/auto-notes existed decode to the safe defaults.
+        let legacy = try decode(AppSettings.self, #"{"provider":"openai"}"#)
+        XCTAssertEqual(legacy.palette, .indigo)
+        XCTAssertTrue(legacy.autoHealthNotes)
+        // An unknown palette written by a newer build falls back instead of throwing.
+        XCTAssertEqual(try decode(AppSettings.self, #"{"themePalette":"neon"}"#).palette, .indigo)
+        var s = AppSettings()
+        s.themePalette = ThemePalette.sand.rawValue
+        s.autoHealthNotes = false
+        let back = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(s))
+        XCTAssertEqual(back.palette, .sand, "AppSettings.themePalette is missing its tolerant decode line.")
+        XCTAssertFalse(back.autoHealthNotes, "AppSettings.autoHealthNotes is missing its tolerant decode line.")
+    }
+
+    func testHealthNoteSourceTolerance() throws {
+        // Notes saved before auto-findings existed stay manual.
+        let legacy = try decode(HealthNote.self, #"{"title":"neck"}"#)
+        XCTAssertEqual(legacy.source, "")
+        XCTAssertFalse(legacy.isAuto)
+        let n = HealthNote(title: "Findings", text: "x", category: "finding", source: "lab:abc")
+        let back = try JSONDecoder().decode(HealthNote.self, from: JSONEncoder().encode(n))
+        XCTAssertEqual(back.source, "lab:abc", "HealthNote.source is missing its tolerant decode line.")
+        XCTAssertTrue(back.isAuto)
     }
 
     func testAppLockDefaultsAreSafeAndGraceIsValidated() throws {
