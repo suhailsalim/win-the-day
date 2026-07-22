@@ -20,8 +20,8 @@ The data for it genuinely doesn't exist for that day (e.g. no sleep recorded). T
 "unavailable" rather than a misleading zero.
 
 **My prayer times look off.**
-Check the calculation method, branch, and madhab in Settings → Faith — Asr in particular differs by
-madhab. Also confirm the app has location access; times are location-dependent.
+Check the calculation method, branch, and madhab in Settings → Prayer times — Asr in particular
+differs by madhab. Also confirm the app has location access; times are location-dependent.
 
 **Is my data uploaded anywhere?**
 No backend, no account. The only data that leaves the device is what you send to your chosen AI
@@ -29,7 +29,19 @@ provider when using an AI feature, plus coordinates to the free weather service.
 [Settings & privacy](settings.md).
 
 **Can I export my data?**
-A PDF report is built-in. Full structured export/import is on the roadmap.
+Yes. Settings → Backup & data exports a full backup (and auto-backs up to the Files app whenever
+you leave the app); the same page restores one. A doctor-ready PDF report is also built-in, under
+Settings → Apple Health.
+
+**Where does the Health tab's profile come from?**
+It's composed automatically on your device — from your targets, the latest body-comp import, meds
+and notes. Nothing is typed twice: it updates itself on import, and it's what gives the AI coach
+its context.
+
+**Why did a "finding" note appear that I didn't write?**
+After a lab or body-comp import, out-of-range results become an automatic finding note on the
+Health tab, marked with an AUTO badge. It's computed on-device from general reference ranges — no
+extra AI call. Turn it off in Settings → Apple Health → Auto notes from imports.
 
 **What happens to my streak if I'm sick or traveling?**
 Set the day's status (sick / rest / travel) — a legitimate off-day won't break your streak.

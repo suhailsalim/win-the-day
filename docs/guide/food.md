@@ -30,7 +30,8 @@ AI-dependent the longer you use it.
 
 ## 3. Your food library
 
-**Catalog** (Settings → Food library) is your trusted list: name, serving, calories, macros,
+**Catalog** (the **Library** button on Today's Quick log section) is your trusted list: name,
+serving, calories, macros,
 micros. Anything you log often belongs here — library values always win over database or AI
 guesses. Every item carries a source tag (yours / database / Open Food Facts / AI estimate) so you
 know where a number came from.
