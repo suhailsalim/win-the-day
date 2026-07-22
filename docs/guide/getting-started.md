@@ -21,7 +21,7 @@ You'll be asked for:
 
 The coach, meal estimates, plan generation, and tips all use the AI provider you choose.
 
-1. Open **Settings → AI provider**.
+1. Open **Settings → Intelligence**.
 2. Pick a provider: Anthropic, OpenAI, Google Gemini, OpenRouter, DeepSeek, Ollama (a model running
    on your own machine), Ollama Cloud, or Apple Intelligence (no key needed, on-device).
 3. Paste your API key and tap **Test connection**. Keys are stored in the iOS Keychain, never in
