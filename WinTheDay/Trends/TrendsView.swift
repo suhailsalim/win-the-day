@@ -182,7 +182,7 @@ struct TrendsView: View {
                         .font(Theme.serif(50))
                         .foregroundStyle(Theme.adaptive(light: 0x3DA876, darkGrey: 0x5FD79C))
                 }
-                Text("Your one priority metric. Update it in Settings → The prize\(t.prizeName.lowercased().contains("visceral") ? ", or import an InBody report on the Health tab." : ".")")
+                Text("Your one priority metric. Update it in Settings → Targets & profile\(t.prizeName.lowercased().contains("visceral") ? ", or import an InBody report on the Health tab." : ".")")
                     .font(.system(size: 13)).foregroundStyle(Theme.secondaryInk)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -326,7 +326,7 @@ struct TrendsView: View {
                         }
                     }
                     if store.targets.heightCm == 170 && store.targets.ageYears == 30 {
-                        Text("Set your age/height/sex in Settings → Eating score profile for an accurate TDEE.")
+                        Text("Set your age/height/sex in Settings → Targets & profile for an accurate TDEE.")
                             .font(.system(size: 11)).foregroundStyle(Theme.tertiaryInk)
                     }
                 }
